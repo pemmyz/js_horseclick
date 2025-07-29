@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hevoskisat Clicker Challenge</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <div id="game-container">
+        <div class="top-bar">
+            <h1>Hevoskisat Clicker Challenge</h1>
+            <button id="new-game-button">New Game 🚀</button>
+        </div>
+
+        <div id="winner-announcement"></div>
+
+        <p class="instructions">Player 1: Tap 'W' key! | Player 2: Tap 'UP ARROW' key! | Fastest tapper wins!</p>
+        
+        <div id="race-track">
+            <div id="player1-lane" class="lane">
+                <div id="player1-horse" class="horse">🏇</div>
+                <div class="finish-line">🏁</div>
+            </div>
+            <div id="player2-lane" class="lane">
+                 <div id="player2-horse" class="horse">🏇</div>
+                 <div class="finish-line">🏁</div>
+            </div>
+        </div>
+
+        <div id="controls">
+            <div id="player1-controls" class="control-group">
+                <p class="score" id="p1-score">Score: 0</p>
+                <h3>Player 1 (W Key)</h3>
+                <div class="force-container">
+                    <div id="player1-force-bar" class="force-bar"></div>
+                </div>
+                <div class="sabotage-panel" id="p1-sabotage-panel">
+                    <button class="sabotage-item" data-item="syringe" title="Permanent Super Boost">💉</button>
+                    <button class="sabotage-item" data-item="carousel" title="Carousel Opponent (Slow)">🎠</button>
+                    <button class="sabotage-item" data-item="poop" title="Throw Poop">💩</button>
+                    <button class="sabotage-item" data-item="bomb" title="Throw Bomb">💣</button>
+                    <button class="sabotage-item" data-item="gun" title="Clear Obstacle">🔫</button>
+                </div>
+            </div>
+            <div id="player2-controls" class="control-group">
+                <p class="score" id="p2-score">Score: 0</p>
+                <h3>Player 2 (Up Arrow)</h3>
+                <div class="force-container">
+                    <div id="player2-force-bar" class="force-bar"></div>
+                </div>
+                <div class="sabotage-panel" id="p2-sabotage-panel">
+                    <button class="sabotage-item" data-item="syringe" title="Permanent Super Boost">💉</button>
+                    <button class="sabotage-item" data-item="carousel" title="Carousel Opponent (Slow)">🎠</button>
+                    <button class="sabotage-item" data-item="poop" title="Throw Poop">💩</button>
+                    <button class="sabotage-item" data-item="bomb" title="Throw Bomb">💣</button>
+                    <button class="sabotage-item" data-item="gun" title="Clear Obstacle">🔫</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="log-container">
+            <h2>Game Log</h2>
+            <ul id="log-list"></ul>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
