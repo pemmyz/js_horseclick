@@ -56,7 +56,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentDifficulty = 'hard';
     let currentControlScheme = 'wasd-arrow';
     let countdownInterval;
-    let isFirstGame = true; // NEW: Flag for the initial automatic game
+    // REMOVED: isFirstGame flag is no longer needed.
+    // let isFirstGame = true; 
 
     function updateGameParameters() {
         if (currentDifficulty === 'manual') {
@@ -89,7 +90,6 @@ document.addEventListener('DOMContentLoaded', () => {
         return { id, name, horseEl, laneEl, forceBarEl, sprite, force: 0, position: 0, isKeyDown: false };
     }
     
-    // NEW: Separated game board setup from starting the game
     function prepareGameBoard() {
         gameActive = false;
         updateGameParameters();
@@ -101,6 +101,8 @@ document.addEventListener('DOMContentLoaded', () => {
         logList.innerHTML = '';
         winnerAnnEl.innerHTML = '';
         winnerAnnEl.className = '';
+        // UPDATED: Set the text here to reset it after a game finishes.
+        countdownDisplay.textContent = 'Press New game to start';
         updateScoreDisplay();
         
         players.forEach(p => {
@@ -110,14 +112,12 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // UPDATED: This is now the main function for the "New Game" button
     function initGame() {
         if (countdownInterval) clearInterval(countdownInterval);
         prepareGameBoard();
         startCountdown(3, 'Game starting in:');
     }
 
-    // UPDATED: This function is now generic for any countdown duration
     function startCountdown(duration, textPrefix) {
         newGameButton.disabled = true;
         let count = duration;
@@ -185,6 +185,8 @@ document.addEventListener('DOMContentLoaded', () => {
         else p2Score++;
         
         updateScoreDisplay();
+        // UPDATED: After a game ends, reset the countdown text for the next round.
+        countdownDisplay.textContent = 'Press New game to start';
     }
     
     function handleKeyDown(e) {
@@ -288,20 +290,14 @@ document.addEventListener('DOMContentLoaded', () => {
         if (currentDifficulty === 'manual') updateGameParameters();
     });
 
-    // NEW: Listener for the initial game start
-    window.addEventListener('focus', () => {
-        if (isFirstGame) {
-            isFirstGame = false; // Ensure this only runs once
-            prepareGameBoard();
-            startCountdown(5, 'First race starts in:');
-        }
-    }, { once: true }); // The { once: true } option is a clean way to auto-remove the listener after it runs.
-
+    // REMOVED: The automatic game start listener has been removed.
+    // window.addEventListener('focus', ...);
 
     // --- Initializations ---
     updatePlayerTitles();
     updateGameParameters();
-    p1 = createPlayer('p1', 'Player 1', player1Horse, player1Lane, p1ForceBar, p1Sprite);
-    p2 = createPlayer('p2', 'Player 2', player2Horse, player2Lane, p2ForceBar, p2Sprite);
-    logMessage("Welcome! The first race will start automatically.");
+    // UPDATED: prepareGameBoard now handles the initial player setup.
+    prepareGameBoard();
+    // UPDATED: The welcome message is changed to reflect the new starting procedure.
+    logMessage("Welcome! Click 'New Game' to begin the race.");
 });
