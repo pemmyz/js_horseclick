@@ -14,6 +14,31 @@
             <button id="new-game-button">New Game 🚀</button>
         </div>
 
+        <!-- NEW: Difficulty Settings -->
+        <div class="difficulty-settings">
+            <h3>Difficulty</h3>
+            <div class="difficulty-options">
+                <label><input type="radio" name="difficulty" value="easy"> Easy</label>
+                <label><input type="radio" name="difficulty" value="medium" checked> Medium</label>
+                <label><input type="radio" name="difficulty" value="hard"> Hard</label>
+                <label><input type="radio" name="difficulty" value="manual"> Manual</label>
+            </div>
+        </div>
+
+        <!-- NEW: Manual Controls -->
+        <div id="manual-controls" class="manual-controls-area" style="display: none;">
+            <h4>Manual Settings (applies on New Game)</h4>
+            <div class="settings-group">
+                <label for="increment-slider">Tap Power (<span id="increment-value-display">12</span>): </label>
+                <input type="range" id="increment-slider" min="5" max="25" value="12">
+            </div>
+            <div class="settings-group">
+                <label for="drain-rate-slider">Force Drain (<span id="drain-rate-value-display">0.4</span>): </label>
+                <input type="range" id="drain-rate-slider" min="1" max="10" value="4"> <!-- Maps to 0.1 - 1.0 -->
+            </div>
+        </div>
+
+
         <div id="winner-announcement"></div>
 
         <p class="instructions">Player 1: Tap 'W' key! | Player 2: Tap 'UP ARROW' key! | Fastest tapper wins!</p>

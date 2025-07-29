@@ -15,18 +15,33 @@ document.addEventListener('DOMContentLoaded', () => {
     const p1SabotagePanel = document.getElementById('p1-sabotage-panel');
     const p2SabotagePanel = document.getElementById('p2-sabotage-panel');
 
+    // NEW: Difficulty Elements
+    const difficultyRadios = document.querySelectorAll('input[name="difficulty"]');
+    const manualControlsArea = document.getElementById('manual-controls');
+    const incrementSlider = document.getElementById('increment-slider');
+    const incrementValueDisplay = document.getElementById('increment-value-display');
+    const drainRateSlider = document.getElementById('drain-rate-slider');
+    const drainRateValueDisplay = document.getElementById('drain-rate-value-display');
+
     // --- Game Settings ---
-    const DRAIN_RATE = 0.4; // How fast the force bar drains per frame
-    const INCREMENT_PER_TAP = 12; // How much force a single tap adds
-    const MAX_SPEED = 400; // Pixels per second at 100% force
-    const PRESS_COOLDOWN = 50; // Milliseconds between taps
-    const OBSTACLE_OFFSET_PX = 150; // How far ahead obstacles are placed
+    const MAX_SPEED = 200; // REDUCED: Was 400, now horses are slower
+    const PRESS_COOLDOWN = 50;
+    const OBSTACLE_OFFSET_PX = 150;
     const ITEM_DESCRIPTIONS = {
         'syringe': '💉 Super Boost', 'carousel': '🎠 Carousel Glitch', 'poop': '💩 Poop',
         'bomb': '💣 Bomb', 'gun': '🔫 Laser Gun'
     };
+    
+    // NEW: Difficulty Presets
+    const difficultySettings = {
+        easy:   { increment: 18, drainRate: 0.2, drainSlider: 2 },
+        medium: { increment: 12, drainRate: 0.4, drainSlider: 4 },
+        hard:   { increment: 8,  drainRate: 0.7, drainSlider: 7 }
+    };
 
     // --- Game State ---
+    let drainRate; // Was const, now variable
+    let incrementPerTap; // Was const, now variable
     let p1, p2;
     let players;
     let obstacles = { p1: [], p2: [] };
@@ -34,6 +49,34 @@ document.addEventListener('DOMContentLoaded', () => {
     let lastTime = 0;
     let p1Score = 0;
     let p2Score = 0;
+    let currentDifficulty = 'medium';
+
+
+    // --- NEW: Difficulty Logic ---
+    function updateGameParameters() {
+        if (currentDifficulty === 'manual') {
+            incrementPerTap = parseInt(incrementSlider.value);
+            drainRate = parseFloat(drainRateSlider.value) / 10;
+        } else {
+            const settings = difficultySettings[currentDifficulty];
+            incrementPerTap = settings.increment;
+            drainRate = settings.drainRate;
+            // Update sliders to reflect preset
+            incrementSlider.value = incrementPerTap;
+            drainRateSlider.value = settings.drainSlider;
+        }
+        // Update display values for sliders
+        incrementValueDisplay.textContent = incrementSlider.value;
+        drainRateValueDisplay.textContent = (parseFloat(drainRateSlider.value) / 10).toFixed(1);
+    }
+
+    function handleDifficultyChange(event) {
+        currentDifficulty = event.target.value;
+        manualControlsArea.style.display = (currentDifficulty === 'manual') ? 'block' : 'none';
+        updateGameParameters();
+    }
+    // --- End New Difficulty Logic ---
+
 
     function createPlayer(id, name, horseEl, laneEl, forceBarEl) {
         return {
@@ -48,6 +91,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     function initGame() {
+        updateGameParameters(); // Apply selected difficulty settings to the new game
+
         // Reset players
         p1 = createPlayer('p1', 'Player 1', player1Horse, player1Lane, p1ForceBar);
         p2 = createPlayer('p2', 'Player 2', player2Horse, player2Lane, p2ForceBar);
@@ -84,44 +129,36 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!gameActive) return;
 
         if (!lastTime) lastTime = currentTime;
-        const deltaTime = (currentTime - lastTime) / 1000; // Time in seconds
+        const deltaTime = (currentTime - lastTime) / 1000;
         lastTime = currentTime;
 
         players.forEach(p => {
-            // 1. Drain force
             if (p.force > 0) {
-                p.force -= DRAIN_RATE;
+                p.force -= drainRate; // Uses variable now
                 if (p.force < 0) p.force = 0;
             }
 
-            // 2. Calculate speed based on force and effects
             let currentSpeed = (p.force / 100) * MAX_SPEED;
             if (p.isRaceCar) currentSpeed *= 1.5;
             if (p.effects.slowed > 0) currentSpeed *= 0.3;
             if (p.effects.stunned > 0) currentSpeed = 0;
             
-            // 3. Update position
             p.position += currentSpeed * deltaTime;
             
-            // 4. Check for collisions
             checkCollisions(p);
 
-            // 5. Update UI
             p.horseEl.style.transform = `translateX(${p.position}px)`;
             p.forceBarEl.style.height = `${p.force}%`;
         });
 
-        // 6. Check for winner
         checkWinCondition();
-        
-        // 7. Process effects (decrement counters)
         processEffects(deltaTime);
 
         requestAnimationFrame(gameLoop);
     }
 
     function checkWinCondition() {
-        const trackWidth = player1Lane.clientWidth - player1Horse.clientWidth - 20; // -20 for finish line
+        const trackWidth = player1Lane.clientWidth - player1Horse.clientWidth - 20;
         const winner = players.find(p => p.position >= trackWidth);
         if (winner) {
             endGame(winner);
@@ -163,14 +200,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (e.key === 'w' || e.key === 'W') {
             if (currentTime - p1.lastPressTime > PRESS_COOLDOWN) {
-                p1.force += INCREMENT_PER_TAP;
+                p1.force += incrementPerTap; // Uses variable now
                 if (p1.force > 100) p1.force = 100;
                 p1.lastPressTime = currentTime;
             }
         } else if (e.key === 'ArrowUp') {
             e.preventDefault();
             if (currentTime - p2.lastPressTime > PRESS_COOLDOWN) {
-                p2.force += INCREMENT_PER_TAP;
+                p2.force += incrementPerTap; // Uses variable now
                 if (p2.force > 100) p2.force = 100;
                 p2.lastPressTime = currentTime;
             }
@@ -198,7 +235,7 @@ document.addEventListener('DOMContentLoaded', () => {
             case 'carousel':
                 logMessage(`📣👀🎠 The Carousel Glitch has slowed ${target.name}!`);
                 target.horseEl.innerHTML = '🎠';
-                target.effects.slowed = 5; // 5 seconds
+                target.effects.slowed = 5;
                 break;
             case 'poop':
                 logMessage(`📣👀💩 ${attacker.name} threw poop onto ${target.name}'s track!`);
@@ -241,7 +278,6 @@ document.addEventListener('DOMContentLoaded', () => {
         for (let i = obstaclesInLane.length - 1; i >= 0; i--) {
             const obs = obstaclesInLane[i];
             if (playerFront >= obs.position) {
-                // Collision detected!
                 triggerObstacleEffect(player, obs);
                 obs.el.remove();
                 obstaclesInLane.splice(i, 1);
@@ -252,7 +288,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function triggerObstacleEffect(player, obstacle) {
         if (obstacle.type === 'stun') {
             logMessage(`📣👀🤭💩 Oh no! ${player.name} slipped on poop and is stunned!`);
-            player.effects.stunned = 2; // 2 seconds
+            player.effects.stunned = 2;
         } else if (obstacle.type === 'bomb') {
             logMessage(`💥 KABOOM! ${player.name} hit a bomb and was blown away!`);
             player.horseEl.style.opacity = 0;
@@ -276,16 +312,25 @@ document.addEventListener('DOMContentLoaded', () => {
     document.addEventListener('keydown', handleKeyPress);
     newGameButton.addEventListener('click', initGame);
     p1SabotagePanel.addEventListener('click', (e) => {
-        if (e.target.classList.contains('sabotage-item')) {
-            useSabotageItem(0, e.target.dataset.item);
-        }
+        if (e.target.classList.contains('sabotage-item')) useSabotageItem(0, e.target.dataset.item);
     });
     p2SabotagePanel.addEventListener('click', (e) => {
-        if (e.target.classList.contains('sabotage-item')) {
-            useSabotageItem(1, e.target.dataset.item);
-        }
+        if (e.target.classList.contains('sabotage-item')) useSabotageItem(1, e.target.dataset.item);
     });
 
+    // NEW: Difficulty Listeners
+    difficultyRadios.forEach(radio => radio.addEventListener('change', handleDifficultyChange));
+    incrementSlider.addEventListener('input', () => {
+        incrementValueDisplay.textContent = incrementSlider.value;
+        if (currentDifficulty === 'manual') updateGameParameters();
+    });
+    drainRateSlider.addEventListener('input', () => {
+        drainRateValueDisplay.textContent = (parseFloat(drainRateSlider.value) / 10).toFixed(1);
+        if (currentDifficulty === 'manual') updateGameParameters();
+    });
+
+
     // --- Initializations ---
+    updateGameParameters(); // Set initial difficulty based on default checked radio
     initGame();
 });
