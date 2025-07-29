@@ -13,11 +13,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const p1ScoreDisplay = document.getElementById('p1-score');
     const p2ScoreDisplay = document.getElementById('p2-score');
 
-    // Customization Elements
+    // Modal & Customization Elements
+    const customizeToggleButton = document.getElementById('customize-toggle-button');
+    const modalOverlay = document.getElementById('modal-overlay');
+    const customizeModal = document.getElementById('customize-modal');
+    const closeModalButton = document.getElementById('close-modal-button');
     const p1CurrentVehicle = document.getElementById('p1-current-vehicle');
     const p2CurrentVehicle = document.getElementById('p2-current-vehicle');
-    const customizeMenu = document.getElementById('customize-menu');
-
+    
     // Difficulty Elements
     const difficultyRadios = document.querySelectorAll('input[name="difficulty"]');
     const manualControlsArea = document.getElementById('manual-controls');
@@ -29,8 +32,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Game Settings ---
     const MAX_SPEED = 200;
     const PRESS_COOLDOWN = 50;
-    
-    // Difficulty Presets
     const difficultySettings = {
         easy:   { increment: 18, drainRate: 0.2, drainSlider: 2 },
         medium: { increment: 12, drainRate: 0.4, drainSlider: 4 },
@@ -38,11 +39,9 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // --- Game State ---
-    let p1Sprite = '🏇'; // NEW: Persistent sprite choice
-    let p2Sprite = '🏇'; // NEW: Persistent sprite choice
+    let p1Sprite = '🏇', p2Sprite = '🏇';
     let drainRate, incrementPerTap;
-    let p1, p2;
-    let players;
+    let p1, p2, players;
     let gameActive = false;
     let lastTime = 0;
     let p1Score = 0, p2Score = 0;
@@ -65,15 +64,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function handleDifficultyChange(event) {
         currentDifficulty = event.target.value;
-        manualControlsArea.style.display = (currentDifficulty === 'manual') ? 'block' : 'none';
+        manualControlsArea.classList.toggle('hidden', currentDifficulty !== 'manual');
         updateGameParameters();
     }
 
     function createPlayer(id, name, horseEl, laneEl, forceBarEl, sprite) {
         return {
-            id: id, name: name,
-            horseEl: horseEl, laneEl: laneEl, forceBarEl: forceBarEl,
-            sprite: sprite, // Store the chosen sprite
+            id, name, horseEl, laneEl, forceBarEl, sprite,
             force: 0, position: 0, lastPressTime: 0
         };
     }
@@ -91,8 +88,8 @@ document.addEventListener('DOMContentLoaded', () => {
         updateScoreDisplay();
         
         players.forEach(p => {
-            p.horseEl.innerHTML = p.sprite; // Set the chosen sprite
-            p.horseEl.style.transform = `translateX(0px) scaleX(-1)`; // Reset position, keep flip
+            p.horseEl.innerHTML = p.sprite;
+            p.horseEl.style.transform = `translateX(0px) scaleX(-1)`;
             p.forceBarEl.style.height = '0%';
         });
 
@@ -127,11 +124,15 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function checkWinCondition() {
-        const trackWidth = player1Lane.clientWidth - player1Horse.clientWidth - 20;
+        // UPDATED: Dynamically calculate the finish line's position
+        // This makes it robust even if CSS for the finish line changes.
+        const finishLine = player1Lane.querySelector('.finish-line');
+        // The '10' should match the 'right' property value in the CSS for .finish-line
+        const finishLineOffset = 10; 
+        const trackWidth = player1Lane.clientWidth - player1Horse.clientWidth - finishLine.offsetWidth - finishLineOffset;
+
         const winner = players.find(p => p.position >= trackWidth);
-        if (winner) {
-            endGame(winner);
-        }
+        if (winner) endGame(winner);
     }
 
     function endGame(winner) {
@@ -147,9 +148,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     function handleKeyPress(e) {
-        if (!gameActive) return;
-        const currentTime = Date.now();
+        if (!gameActive && e.key !== 'Escape') return;
 
+        if (e.key === 'Escape') {
+            closeCustomizeModal();
+            return;
+        }
+
+        const currentTime = Date.now();
         if (e.key === 'w' || e.key === 'W') {
             if (currentTime - p1.lastPressTime > PRESS_COOLDOWN) {
                 p1.force += incrementPerTap;
@@ -176,14 +182,24 @@ document.addEventListener('DOMContentLoaded', () => {
         if (selectorId === 'p1-vehicle-selector') {
             p1Sprite = vehicle;
             p1CurrentVehicle.textContent = vehicle;
-            if (p1) p1.horseEl.innerHTML = vehicle; // Update live if game is running
+            if (p1) p1.horseEl.innerHTML = vehicle;
         } else if (selectorId === 'p2-vehicle-selector') {
             p2Sprite = vehicle;
             p2CurrentVehicle.textContent = vehicle;
-            if (p2) p2.horseEl.innerHTML = vehicle; // Update live if game is running
+            if (p2) p2.horseEl.innerHTML = vehicle;
         }
     }
     
+    function openCustomizeModal() {
+        modalOverlay.classList.remove('hidden');
+        customizeModal.classList.remove('hidden');
+    }
+
+    function closeCustomizeModal() {
+        modalOverlay.classList.add('hidden');
+        customizeModal.classList.add('hidden');
+    }
+
     function logMessage(message) {
         const li = document.createElement('li');
         li.textContent = message;
@@ -198,8 +214,12 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Event Listeners ---
     document.addEventListener('keydown', handleKeyPress);
     newGameButton.addEventListener('click', initGame);
-    customizeMenu.addEventListener('click', handleVehicleSelection); // NEW
-
+    
+    customizeToggleButton.addEventListener('click', openCustomizeModal);
+    closeModalButton.addEventListener('click', closeCustomizeModal);
+    modalOverlay.addEventListener('click', closeCustomizeModal);
+    customizeModal.addEventListener('click', handleVehicleSelection);
+    
     difficultyRadios.forEach(radio => radio.addEventListener('change', handleDifficultyChange));
     incrementSlider.addEventListener('input', () => {
         incrementValueDisplay.textContent = incrementSlider.value;
