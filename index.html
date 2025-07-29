@@ -40,7 +40,9 @@
         </div>
 
         <div id="winner-announcement"></div>
-
+        
+        <div id="countdown-display"></div>
+        
         <p class="instructions">Player 1: Tap 'W' Key! | Player 2: Tap 'UP ARROW' Key!</p>
         
         <div id="race-track">
@@ -57,14 +59,14 @@
         <div id="controls">
             <div id="player1-controls" class="control-group">
                 <p class="score" id="p1-score">Score: 0</p>
-                <h3>Player 1 (W Key)</h3>
+                <h3 id="p1-title">Player 1 (W Key)</h3>
                 <div class="force-container">
                     <div id="player1-force-bar" class="force-bar"></div>
                 </div>
             </div>
             <div id="player2-controls" class="control-group">
                 <p class="score" id="p2-score">Score: 0</p>
-                <h3>Player 2 (Up Arrow)</h3>
+                <h3 id="p2-title">Player 2 (Up Arrow)</h3>
                 <div class="force-container">
                     <div id="player2-force-bar" class="force-bar"></div>
                 </div>
@@ -82,7 +84,7 @@
     <div id="customize-modal" class="hidden">
         <div class="modal-content">
             <button id="close-modal-button" class="close-button">×</button>
-            <h2>Choose Your Vehicle</h2>
+            <h2>Customize</h2>
             <div class="customize-player-section">
                 <h4>Player 1 Vehicle: <span id="p1-current-vehicle">🏇</span></h4>
                 <div class="vehicle-selector" id="p1-vehicle-selector">
@@ -101,6 +103,15 @@
                     <button class="vehicle-btn" data-vehicle="🎠">🎠</button>
                     <button class="vehicle-btn" data-vehicle="🏃‍♂️">🏃‍♂️</button>
                     <button class="vehicle-btn" data-vehicle="🚴‍♀️">🚴‍♀️</button>
+                </div>
+            </div>
+
+            <div class="control-config-section">
+                <h4>Control Scheme</h4>
+                <div class="control-options">
+                    <label><input type="radio" name="controls" value="wasd-arrow" checked> W / Up Arrow</label>
+                    <!-- UPDATED: Changed value and label text -->
+                    <label><input type="radio" name="controls" value="shift-num"> Shift / Numpad Enter</label>
                 </div>
             </div>
         </div>
