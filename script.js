@@ -41,7 +41,6 @@ document.addEventListener('DOMContentLoaded', () => {
         medium: { increment: 12, drainRate: 0.4, drainSlider: 4 },
         hard:   { increment: 8,  drainRate: 0.7, drainSlider: 7 }
     };
-    // UPDATED: Control configuration for Shift key
     const controlConfigs = {
         'wasd-arrow': { 
             player1: 'w', 
@@ -50,7 +49,7 @@ document.addEventListener('DOMContentLoaded', () => {
             p2Display: 'Up Arrow' 
         },
         'shift-num': { 
-            player1: 'shift', // Works for both Left and Right Shift
+            player1: 'shift', 
             player2: 'numpadenter', 
             p1Display: 'Shift', 
             p2Display: 'Numpad Enter' 
@@ -64,7 +63,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let gameActive = false;
     let lastTime = 0;
     let p1Score = 0, p2Score = 0;
-    let currentDifficulty = 'medium';
+    // UPDATED: Changed default difficulty
+    let currentDifficulty = 'hard';
     let currentControlScheme = 'wasd-arrow';
     let countdownInterval;
 
@@ -122,7 +122,6 @@ document.addEventListener('DOMContentLoaded', () => {
         startCountdown();
     }
 
-    // UPDATED: Changed countdown text
     function startCountdown() {
         newGameButton.disabled = true;
         let count = 3;
@@ -203,6 +202,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const key = e.key.toLowerCase();
 
         if (key === config.player1) {
+            e.preventDefault(); // Prevent default browser action for keys like Shift
             if (p1.isKeyDown) return;
             p1.isKeyDown = true;
             p1.force += incrementPerTap;
