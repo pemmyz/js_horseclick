@@ -13,6 +13,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const p1ScoreDisplay = document.getElementById('p1-score');
     const p2ScoreDisplay = document.getElementById('p2-score');
 
+    // Customization Elements
+    const p1CurrentVehicle = document.getElementById('p1-current-vehicle');
+    const p2CurrentVehicle = document.getElementById('p2-current-vehicle');
+    const customizeMenu = document.getElementById('customize-menu');
+
     // Difficulty Elements
     const difficultyRadios = document.querySelectorAll('input[name="difficulty"]');
     const manualControlsArea = document.getElementById('manual-controls');
@@ -33,18 +38,16 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // --- Game State ---
-    let drainRate;
-    let incrementPerTap;
+    let p1Sprite = '🏇'; // NEW: Persistent sprite choice
+    let p2Sprite = '🏇'; // NEW: Persistent sprite choice
+    let drainRate, incrementPerTap;
     let p1, p2;
     let players;
     let gameActive = false;
     let lastTime = 0;
-    let p1Score = 0;
-    let p2Score = 0;
+    let p1Score = 0, p2Score = 0;
     let currentDifficulty = 'medium';
 
-
-    // --- Difficulty Logic ---
     function updateGameParameters() {
         if (currentDifficulty === 'manual') {
             incrementPerTap = parseInt(incrementSlider.value);
@@ -66,21 +69,20 @@ document.addEventListener('DOMContentLoaded', () => {
         updateGameParameters();
     }
 
-
-    function createPlayer(id, name, horseEl, laneEl, forceBarEl) {
+    function createPlayer(id, name, horseEl, laneEl, forceBarEl, sprite) {
         return {
             id: id, name: name,
-            force: 0, position: 0,
             horseEl: horseEl, laneEl: laneEl, forceBarEl: forceBarEl,
-            lastPressTime: 0
+            sprite: sprite, // Store the chosen sprite
+            force: 0, position: 0, lastPressTime: 0
         };
     }
     
     function initGame() {
         updateGameParameters();
 
-        p1 = createPlayer('p1', 'Player 1', player1Horse, player1Lane, p1ForceBar);
-        p2 = createPlayer('p2', 'Player 2', player2Horse, player2Lane, p2ForceBar);
+        p1 = createPlayer('p1', 'Player 1', player1Horse, player1Lane, p1ForceBar, p1Sprite);
+        p2 = createPlayer('p2', 'Player 2', player2Horse, player2Lane, p2ForceBar, p2Sprite);
         players = [p1, p2];
 
         logList.innerHTML = '';
@@ -89,7 +91,8 @@ document.addEventListener('DOMContentLoaded', () => {
         updateScoreDisplay();
         
         players.forEach(p => {
-            p.horseEl.style.transform = `translateX(0px)`;
+            p.horseEl.innerHTML = p.sprite; // Set the chosen sprite
+            p.horseEl.style.transform = `translateX(0px) scaleX(-1)`; // Reset position, keep flip
             p.forceBarEl.style.height = '0%';
         });
 
@@ -107,20 +110,15 @@ document.addEventListener('DOMContentLoaded', () => {
         lastTime = currentTime;
 
         players.forEach(p => {
-            // Drain force
             if (p.force > 0) {
                 p.force -= drainRate;
                 if (p.force < 0) p.force = 0;
             }
 
-            // Calculate speed based on force
             let currentSpeed = (p.force / 100) * MAX_SPEED;
-            
-            // Update position
             p.position += currentSpeed * deltaTime;
             
-            // Update UI
-            p.horseEl.style.transform = `translateX(${p.position}px)`;
+            p.horseEl.style.transform = `translateX(${p.position}px) scaleX(-1)`;
             p.forceBarEl.style.height = `${p.force}%`;
         });
 
@@ -167,8 +165,25 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
     }
+
+    function handleVehicleSelection(e) {
+        const btn = e.target.closest('.vehicle-btn');
+        if (!btn) return;
+
+        const vehicle = btn.dataset.vehicle;
+        const selectorId = btn.parentElement.id;
+
+        if (selectorId === 'p1-vehicle-selector') {
+            p1Sprite = vehicle;
+            p1CurrentVehicle.textContent = vehicle;
+            if (p1) p1.horseEl.innerHTML = vehicle; // Update live if game is running
+        } else if (selectorId === 'p2-vehicle-selector') {
+            p2Sprite = vehicle;
+            p2CurrentVehicle.textContent = vehicle;
+            if (p2) p2.horseEl.innerHTML = vehicle; // Update live if game is running
+        }
+    }
     
-    // --- Utility Functions ---
     function logMessage(message) {
         const li = document.createElement('li');
         li.textContent = message;
@@ -183,6 +198,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Event Listeners ---
     document.addEventListener('keydown', handleKeyPress);
     newGameButton.addEventListener('click', initGame);
+    customizeMenu.addEventListener('click', handleVehicleSelection); // NEW
 
     difficultyRadios.forEach(radio => radio.addEventListener('change', handleDifficultyChange));
     incrementSlider.addEventListener('input', () => {

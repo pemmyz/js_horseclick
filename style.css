@@ -33,13 +33,19 @@ body {
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
 }
 
-h1, h2, h3 {
+h1, h2, h3, h4 {
     text-align: center;
     color: var(--title-color);
-    border-bottom: 1px solid var(--border-color);
-    padding-bottom: 0.5rem;
     margin-top: 0;
 }
+h1, h2, h3 {
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 0.5rem;
+}
+h4 {
+    margin-bottom: 0.5rem;
+}
+
 
 .top-bar {
     display: flex;
@@ -62,6 +68,48 @@ h1, h2, h3 {
     background-color: #5cb85c;
 }
 
+/* --- NEW: Customization Menu Styles --- */
+#customize-menu {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background-color: var(--bg-color);
+}
+.customize-player-section {
+    text-align: center;
+}
+.customize-player-section h4 {
+    border: none;
+    font-size: 1em;
+}
+.customize-player-section h4 span {
+    font-size: 1.5em;
+    vertical-align: middle;
+}
+.vehicle-selector {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: center;
+}
+.vehicle-btn {
+    font-size: 1.5rem;
+    width: 40px;
+    height: 40px;
+    border: 1px solid #4a4a4a;
+    border-radius: 5px;
+    background-color: #3a3d41;
+    color: #ccc;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+.vehicle-btn:hover {
+    background-color: #4a4d51;
+}
+
 /* --- Difficulty and Manual Styles --- */
 .difficulty-settings, .manual-controls-area {
     margin-bottom: 1rem;
@@ -71,7 +119,6 @@ h1, h2, h3 {
     background-color: var(--bg-color);
 }
 .difficulty-settings h3, .manual-controls-area h4 {
-    margin-top: 0;
     margin-bottom: 10px;
     font-size: 1.1em;
     border: none;
@@ -117,43 +164,24 @@ h1, h2, h3 {
     color: var(--accent-color);
 }
 input[type=range] {
-  -webkit-appearance: none;
-  appearance: none;
-  background: transparent;
-  cursor: pointer;
+  -webkit-appearance: none; appearance: none;
+  background: transparent; cursor: pointer;
 }
 input[type=range]::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  border: 1px solid var(--border-color);
-  height: 18px;
-  width: 18px;
-  border-radius: 50%;
-  background: var(--title-color);
-  margin-top: -7px;
+  -webkit-appearance: none; appearance: none; border: 1px solid var(--border-color); height: 18px; width: 18px;
+  border-radius: 50%; background: var(--title-color); margin-top: -7px;
 }
 input[type=range]::-moz-range-thumb {
-  border: 1px solid var(--border-color);
-  height: 18px;
-  width: 18px;
-  border-radius: 50%;
-  background: var(--title-color);
+  border: 1px solid var(--border-color); height: 18px; width: 18px;
+  border-radius: 50%; background: var(--title-color);
 }
 input[type=range]::-webkit-slider-runnable-track {
-  width: 100%;
-  height: 5px;
-  cursor: pointer;
-  background: var(--track-bg);
-  border-radius: 3px;
-  border: 1px solid var(--border-color);
+  width: 100%; height: 5px; cursor: pointer; background: var(--track-bg);
+  border-radius: 3px; border: 1px solid var(--border-color);
 }
 input[type=range]::-moz-range-track {
-  width: 100%;
-  height: 5px;
-  cursor: pointer;
-  background: var(--track-bg);
-  border-radius: 3px;
-  border: 1px solid var(--border-color);
+  width: 100%; height: 5px; cursor: pointer; background: var(--track-bg);
+  border-radius: 3px; border: 1px solid var(--border-color);
 }
 
 .instructions {
@@ -164,101 +192,60 @@ input[type=range]::-moz-range-track {
 }
 
 #race-track {
-    background-color: #1a1a1a;
-    padding: 1rem;
-    border-radius: 4px;
-    margin-bottom: 1.5rem;
-    border: 1px solid #333;
-    position: relative;
-    overflow: hidden;
+    background-color: #1a1a1a; padding: 1rem; border-radius: 4px;
+    margin-bottom: 1.5rem; border: 1px solid #333; position: relative; overflow: hidden;
 }
 
 .lane {
-    position: relative;
-    height: 50px;
-    background-color: var(--track-bg);
-    border-radius: 3px;
-    margin-bottom: 10px;
-    border: 1px solid #444;
-    display: flex;
-    align-items: center;
+    position: relative; height: 50px; background-color: var(--track-bg);
+    border-radius: 3px; margin-bottom: 10px; border: 1px solid #444;
+    display: flex; align-items: center;
 }
-.lane:last-child {
-    margin-bottom: 0;
-}
+.lane:last-child { margin-bottom: 0; }
 .lane .finish-line {
-    position: absolute;
-    right: 0;
-    top: 0;
-    height: 100%;
-    width: 20px;
-    font-size: 2rem;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    position: absolute; right: 0; top: 0; height: 100%; width: 20px; font-size: 2rem;
+    display: flex; align-items: center; justify-content: center;
 }
 
 .horse {
-    position: absolute;
-    top: 50%;
-    transform: translateY(-50%);
-    font-size: 1.8rem;
-    z-index: 10;
+    position: absolute; top: 50%;
+    /* UPDATED: Added scaleX(-1) to flip the emoji */
+    transform: translateY(-50%) scaleX(-1);
+    font-size: 1.8rem; z-index: 10;
 }
 
 #player1-horse { color: var(--p1-color); }
 #player2-horse { color: var(--p2-color); }
 
 #controls {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 1.5rem;
-    margin-bottom: 1.5rem;
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 1.5rem; margin-bottom: 1.5rem;
 }
 
 .control-group {
-    text-align: center;
-    border: 2px solid var(--border-color);
-    padding: 1rem;
-    border-radius: 5px;
-    background-color: var(--container-bg);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
+    text-align: center; border: 2px solid var(--border-color); padding: 1rem;
+    border-radius: 5px; background-color: var(--container-bg);
+    display: flex; flex-direction: column; align-items: center;
 }
 
 .control-group h3 {
-    margin-top: 0;
-    border: none;
-    height: auto;
-    margin-bottom: 10px;
+    border: none; height: auto; margin-bottom: 10px;
 }
 
 .score {
-    color: var(--accent-color);
-    font-weight: bold;
-    font-size: 1.1rem;
-    margin-top: 0;
-    margin-bottom: 0.5rem;
+    color: var(--accent-color); font-weight: bold; font-size: 1.1rem;
+    margin-top: 0; margin-bottom: 0.5rem;
 }
 
 .force-container {
-    width: 40px;
-    height: 150px;
-    background-color: var(--force-bar-bg);
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    position: relative;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column-reverse;
-    margin: 10px auto;
+    width: 40px; height: 150px; background-color: var(--force-bar-bg);
+    border: 1px solid var(--border-color); border-radius: 8px;
+    position: relative; overflow: hidden; display: flex;
+    flex-direction: column-reverse; margin: 10px auto;
 }
 
 .force-bar {
-    width: 100%;
-    height: 0%;
-    transition: height 0.05s ease-out;
+    width: 100%; height: 0%; transition: height 0.05s ease-out;
     border-radius: 6px 6px 0 0;
 }
 
@@ -266,36 +253,22 @@ input[type=range]::-moz-range-track {
 #player2-force-bar { background-color: var(--p2-color); }
 
 #log-container {
-    background-color: var(--bg-color);
-    border: 1px solid var(--border-color);
-    border-radius: 5px;
-    padding: 1rem;
-    height: 150px;
-    overflow-y: auto;
+    background-color: var(--bg-color); border: 1px solid var(--border-color);
+    border-radius: 5px; padding: 1rem; height: 150px; overflow-y: auto;
 }
 
 #log-list {
-    list-style: none;
-    padding: 0;
-    margin: 0;
+    list-style: none; padding: 0; margin: 0;
 }
 #log-list li {
-    padding: 0.3rem 0.5rem;
-    border-bottom: 1px dashed #333;
-    font-family: 'Consolas', 'Courier New', monospace;
-    word-break: break-word;
+    padding: 0.3rem 0.5rem; border-bottom: 1px dashed #333;
+    font-family: 'Consolas', 'Courier New', monospace; word-break: break-word;
 }
-#log-list li:last-child {
-    border-bottom: none;
-}
+#log-list li:last-child { border-bottom: none; }
 
 #winner-announcement {
-    font-size: 2.5em;
-    font-weight: bold;
-    text-align: center;
-    padding: 1rem;
-    margin-bottom: 1rem;
-    min-height: 2.5em;
+    font-size: 2.5em; font-weight: bold; text-align: center;
+    padding: 1rem; margin-bottom: 1rem; min-height: 2.5em;
 }
 .player1-win { color: var(--p1-color); }
 .player2-win { color: var(--p2-color); }
