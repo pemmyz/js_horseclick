@@ -42,18 +42,8 @@ document.addEventListener('DOMContentLoaded', () => {
         hard:   { increment: 8,  drainRate: 0.7, drainSlider: 7 }
     };
     const controlConfigs = {
-        'wasd-arrow': { 
-            player1: 'w', 
-            player2: 'arrowup', 
-            p1Display: 'W Key', 
-            p2Display: 'Up Arrow' 
-        },
-        'shift-num': { 
-            player1: 'shift', 
-            player2: 'numpadenter', 
-            p1Display: 'Shift', 
-            p2Display: 'Numpad Enter' 
-        }
+        'wasd-arrow': { player1: 'w', player2: 'arrowup', p1Display: 'W Key', p2Display: 'Up Arrow' },
+        'shift-num': { player1: 'shift', player2: 'numpadenter', p1Display: 'Shift', p2Display: 'Numpad Enter' }
     };
 
     // --- Game State ---
@@ -63,10 +53,10 @@ document.addEventListener('DOMContentLoaded', () => {
     let gameActive = false;
     let lastTime = 0;
     let p1Score = 0, p2Score = 0;
-    // UPDATED: Changed default difficulty
     let currentDifficulty = 'hard';
     let currentControlScheme = 'wasd-arrow';
     let countdownInterval;
+    let isFirstGame = true; // NEW: Flag for the initial automatic game
 
     function updateGameParameters() {
         if (currentDifficulty === 'manual') {
@@ -99,8 +89,8 @@ document.addEventListener('DOMContentLoaded', () => {
         return { id, name, horseEl, laneEl, forceBarEl, sprite, force: 0, position: 0, isKeyDown: false };
     }
     
-    function initGame() {
-        if (countdownInterval) clearInterval(countdownInterval);
+    // NEW: Separated game board setup from starting the game
+    function prepareGameBoard() {
         gameActive = false;
         updateGameParameters();
 
@@ -118,19 +108,25 @@ document.addEventListener('DOMContentLoaded', () => {
             p.horseEl.style.transform = `translateX(0px) scaleX(-1)`;
             p.forceBarEl.style.height = '0%';
         });
-        
-        startCountdown();
     }
 
-    function startCountdown() {
+    // UPDATED: This is now the main function for the "New Game" button
+    function initGame() {
+        if (countdownInterval) clearInterval(countdownInterval);
+        prepareGameBoard();
+        startCountdown(3, 'Game starting in:');
+    }
+
+    // UPDATED: This function is now generic for any countdown duration
+    function startCountdown(duration, textPrefix) {
         newGameButton.disabled = true;
-        let count = 3;
-        countdownDisplay.textContent = `Game starting in: ${count}`;
+        let count = duration;
+        countdownDisplay.textContent = `${textPrefix} ${count}`;
 
         countdownInterval = setInterval(() => {
             count--;
             if (count > 0) {
-                countdownDisplay.textContent = `Game starting in: ${count}`;
+                countdownDisplay.textContent = `${textPrefix} ${count}`;
             } else {
                 clearInterval(countdownInterval);
                 countdownDisplay.textContent = 'GO!';
@@ -202,7 +198,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const key = e.key.toLowerCase();
 
         if (key === config.player1) {
-            e.preventDefault(); // Prevent default browser action for keys like Shift
+            e.preventDefault();
             if (p1.isKeyDown) return;
             p1.isKeyDown = true;
             p1.force += incrementPerTap;
@@ -292,10 +288,20 @@ document.addEventListener('DOMContentLoaded', () => {
         if (currentDifficulty === 'manual') updateGameParameters();
     });
 
+    // NEW: Listener for the initial game start
+    window.addEventListener('focus', () => {
+        if (isFirstGame) {
+            isFirstGame = false; // Ensure this only runs once
+            prepareGameBoard();
+            startCountdown(5, 'First race starts in:');
+        }
+    }, { once: true }); // The { once: true } option is a clean way to auto-remove the listener after it runs.
+
+
     // --- Initializations ---
     updatePlayerTitles();
     updateGameParameters();
     p1 = createPlayer('p1', 'Player 1', player1Horse, player1Lane, p1ForceBar, p1Sprite);
     p2 = createPlayer('p2', 'Player 2', player2Horse, player2Lane, p2ForceBar, p2Sprite);
-    logMessage("Welcome! Click 'New Game' to start a race.");
+    logMessage("Welcome! The first race will start automatically.");
 });
