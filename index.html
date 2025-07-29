@@ -14,7 +14,6 @@
             <button id="new-game-button">New Game 🚀</button>
         </div>
 
-        <!-- NEW: Difficulty Settings -->
         <div class="difficulty-settings">
             <h3>Difficulty</h3>
             <div class="difficulty-options">
@@ -25,7 +24,6 @@
             </div>
         </div>
 
-        <!-- NEW: Manual Controls -->
         <div id="manual-controls" class="manual-controls-area" style="display: none;">
             <h4>Manual Settings (applies on New Game)</h4>
             <div class="settings-group">
@@ -38,10 +36,9 @@
             </div>
         </div>
 
-
         <div id="winner-announcement"></div>
 
-        <p class="instructions">Player 1: Tap 'W' key! | Player 2: Tap 'UP ARROW' key! | Fastest tapper wins!</p>
+        <p class="instructions">Player 1: Tap 'W' Key! | Player 2: Tap 'UP ARROW' Key!</p>
         
         <div id="race-track">
             <div id="player1-lane" class="lane">
@@ -61,26 +58,12 @@
                 <div class="force-container">
                     <div id="player1-force-bar" class="force-bar"></div>
                 </div>
-                <div class="sabotage-panel" id="p1-sabotage-panel">
-                    <button class="sabotage-item" data-item="syringe" title="Permanent Super Boost">💉</button>
-                    <button class="sabotage-item" data-item="carousel" title="Carousel Opponent (Slow)">🎠</button>
-                    <button class="sabotage-item" data-item="poop" title="Throw Poop">💩</button>
-                    <button class="sabotage-item" data-item="bomb" title="Throw Bomb">💣</button>
-                    <button class="sabotage-item" data-item="gun" title="Clear Obstacle">🔫</button>
-                </div>
             </div>
             <div id="player2-controls" class="control-group">
                 <p class="score" id="p2-score">Score: 0</p>
                 <h3>Player 2 (Up Arrow)</h3>
                 <div class="force-container">
                     <div id="player2-force-bar" class="force-bar"></div>
-                </div>
-                <div class="sabotage-panel" id="p2-sabotage-panel">
-                    <button class="sabotage-item" data-item="syringe" title="Permanent Super Boost">💉</button>
-                    <button class="sabotage-item" data-item="carousel" title="Carousel Opponent (Slow)">🎠</button>
-                    <button class="sabotage-item" data-item="poop" title="Throw Poop">💩</button>
-                    <button class="sabotage-item" data-item="bomb" title="Throw Bomb">💣</button>
-                    <button class="sabotage-item" data-item="gun" title="Clear Obstacle">🔫</button>
                 </div>
             </div>
         </div>

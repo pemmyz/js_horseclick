@@ -62,7 +62,7 @@ h1, h2, h3 {
     background-color: #5cb85c;
 }
 
-/* --- NEW: Difficulty and Manual Styles --- */
+/* --- Difficulty and Manual Styles --- */
 .difficulty-settings, .manual-controls-area {
     margin-bottom: 1rem;
     padding: 1rem;
@@ -155,8 +155,6 @@ input[type=range]::-moz-range-track {
   border-radius: 3px;
   border: 1px solid var(--border-color);
 }
-/* --- End New Styles --- */
-
 
 .instructions {
     text-align: center;
@@ -200,7 +198,7 @@ input[type=range]::-moz-range-track {
     justify-content: center;
 }
 
-.horse, .obstacle {
+.horse {
     position: absolute;
     top: 50%;
     transform: translateY(-50%);
@@ -267,46 +265,12 @@ input[type=range]::-moz-range-track {
 #player1-force-bar { background-color: var(--p1-color); }
 #player2-force-bar { background-color: var(--p2-color); }
 
-.sabotage-panel {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-    justify-content: center;
-    margin-top: auto;
-}
-
-.sabotage-item {
-    font-size: 1.5rem;
-    padding: 0.5rem;
-    width: 50px;
-    height: 50px;
-    border: 1px solid #4a4a4a;
-    border-radius: 5px;
-    background-color: #3a3d41;
-    color: #ccc;
-    cursor: pointer;
-    transition: background-color 0.2s, transform 0.1s;
-}
-
-.sabotage-item:hover:not(:disabled) {
-    background-color: #4a4d51;
-}
-.sabotage-item:active:not(:disabled) {
-    transform: scale(0.95);
-}
-.sabotage-item:disabled {
-    background-color: #2a2d31;
-    color: #666;
-    cursor: not-allowed;
-    opacity: 0.5;
-}
-
 #log-container {
     background-color: var(--bg-color);
     border: 1px solid var(--border-color);
     border-radius: 5px;
     padding: 1rem;
-    height: 200px;
+    height: 150px;
     overflow-y: auto;
 }
 
