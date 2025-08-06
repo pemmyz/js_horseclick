@@ -164,6 +164,21 @@ h4 {
 }
 .vehicle-btn:hover { background-color: #4a4d51; }
 
+/* --- CHANGE START --- */
+/* Mirror vehicle emoticons for both players */
+.vehicle-selector .vehicle-btn,
+#p1-current-vehicle,
+#p2-current-vehicle {
+    transform: scaleX(-1);
+}
+
+#p1-current-vehicle,
+#p2-current-vehicle {
+    /* Ensures the transform applies correctly to the span element */
+    display: inline-block;
+}
+/* --- CHANGE END --- */
+
 /* NEW: Control Config Styles */
 .control-config-section {
     margin-top: 2rem;
