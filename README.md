@@ -4,7 +4,7 @@
 
 **Hevoskisat Clicker Challenge** is a fast-paced, competitive 2-player tapping game made in pure HTML5, CSS3, and JavaScript. Tap your keys to charge force and race your chosen character to the finish line. First to cross wins!
 
-![screenshot](screenshot.png) <!-- Add a real screenshot here if available -->
+![screenshot](screenshots/game_1.png)
 
 ---
 
