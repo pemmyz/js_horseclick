@@ -153,12 +153,18 @@ document.addEventListener('DOMContentLoaded', () => {
         laneContainer.querySelector('.remove-player-btn').addEventListener('click', () => removePlayer(playerData.id));
     }
     
+    // --- CHANGE START ---
     function updateGridLayout() {
         const numPlayers = activePlayers.length > 0 ? activePlayers.length : 1;
         const gridTemplate = `repeat(${numPlayers}, 1fr)`;
-        raceTrack.style.gridTemplateColumns = gridTemplate;
+        
+        // This line was removed, as the racetrack is now stacked vertically via CSS
+        // raceTrack.style.gridTemplateColumns = gridTemplate; 
+
+        // The controls container still uses the dynamic grid
         controlsContainer.style.gridTemplateColumns = gridTemplate;
     }
+    // --- CHANGE END ---
 
     function updateGameReadyState() {
         const canStart = activePlayers.length > 0;

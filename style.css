@@ -63,7 +63,6 @@ h4 {
     padding: 0;
 }
 
-/* NEW: Player Management Styles */
 #player-management {
     display: flex;
     align-items: center;
@@ -109,7 +108,6 @@ h4 {
 #customize-toggle-button { background-color: #3a3d41; }
 #customize-toggle-button:hover { background-color: #4a4d51; }
 
-/* --- Modal Styles --- */
 #modal-overlay {
     position: fixed;
     top: 0; left: 0; right: 0; bottom: 0;
@@ -199,12 +197,10 @@ h4 {
     display: inline-block;
 }
 
-/* --- Difficulty & Settings --- */
 .difficulty-settings, .manual-controls-area {
     margin-bottom: 1rem; padding: 1rem; border: 1px solid var(--border-color);
     border-radius: 8px; background-color: var(--bg-color);
 }
-/* ... (rest of difficulty styles are unchanged) */
 .difficulty-settings h3, .manual-controls-area h4 { margin-bottom: 10px; font-size: 1.1em; border: none; text-align: left; }
 .difficulty-options { display: flex; justify-content: center; gap: 15px; flex-wrap: wrap; }
 .difficulty-options label { cursor: pointer; padding: 5px 8px; border-radius: 4px; transition: background-color 0.2s; }
@@ -220,7 +216,6 @@ input[type=range]::-moz-range-thumb { border: 1px solid var(--border-color); hei
 input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 5px; cursor: pointer; background: var(--track-bg); border-radius: 3px; border: 1px solid var(--border-color); }
 input[type=range]::-moz-range-track { width: 100%; height: 5px; cursor: pointer; background: var(--track-bg); border-radius: 3px; border: 1px solid var(--border-color); }
 
-/* --- Game Area --- */
 #countdown-display {
     font-size: 4em; font-weight: bold; color: var(--accent-color); text-align: center;
     height: 1.2em; display: flex; align-items: center; justify-content: center;
@@ -229,14 +224,34 @@ input[type=range]::-moz-range-track { width: 100%; height: 5px; cursor: pointer;
 
 #winner-announcement { font-size: 2.5em; font-weight: bold; text-align: center; padding: 1rem; margin-bottom: 1rem; min-height: 2.5em; }
 
-/* MODIFIED: Layouts for Race Track and Controls */
-#race-track, #controls {
+/* --- CHANGE START --- */
+/* The layout rules for #race-track and #controls have been separated. */
+
+/* Controls layout: Remains a side-by-side grid */
+#controls {
     display: grid;
     gap: 1.5rem;
     margin-bottom: 1.5rem;
-    /* grid-template-columns is now set dynamically via JS */
+    /* grid-template-columns is set dynamically via JS */
 }
-#race-track { background-color: #1a1a1a; padding: 1rem; border-radius: 4px; border: 1px solid #333; position: relative; overflow: hidden; }
+
+/* Racetrack layout: Changed to a vertical stack */
+#race-track {
+    background-color: #1a1a1a;
+    padding: 1rem;
+    border-radius: 4px;
+    margin-bottom: 1.5rem;
+    border: 1px solid #333;
+    position: relative;
+    overflow: hidden;
+
+    /* New rules to stack lanes vertically with a gap */
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+/* --- CHANGE END --- */
+
 
 /* NEW: Lane container and label */
 .lane-container {
@@ -284,7 +299,6 @@ input[type=range]::-moz-range-track { width: 100%; height: 5px; cursor: pointer;
 .force-container { width: 40px; height: 150px; background-color: var(--force-bar-bg); border: 1px solid var(--border-color); border-radius: 8px; position: relative; overflow: hidden; display: flex; flex-direction: column-reverse; margin: 10px auto; }
 .force-bar { width: 100%; height: 0%; transition: height 0.05s ease-out; border-radius: 6px 6px 0 0; }
 
-/* --- Log and Help Styles --- */
 #log-container { background-color: var(--bg-color); border: 1px solid var(--border-color); border-radius: 5px; padding: 1rem; height: 150px; overflow-y: auto; }
 #log-list { list-style: none; padding: 0; margin: 0; }
 #log-list li { padding: 0.3rem 0.5rem; border-bottom: 1px dashed #333; font-family: 'Consolas', 'Courier New', monospace; word-break: break-word; }
