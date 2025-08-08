@@ -33,49 +33,77 @@ document.addEventListener('DOMContentLoaded', () => {
     const drainRateSlider = document.getElementById('drain-rate-slider');
     const drainRateValueDisplay = document.getElementById('drain-rate-value-display');
 
-    // --- Audio ---
-    // Create the AudioContext. It's best practice to create it once.
-    // Some browsers require a user interaction (like a click) to start the audio context.
-    // Our game structure (clicking "New Game") handles this naturally.
+    // --- NEW: Audio Setup and Controls ---
     let audioContext;
-    try {
-        audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    } catch (e) {
-        console.warn("Web Audio API is not supported in this browser.");
+    let masterGainNode;
+    let masterVolume = 0.5; // Start at 50% volume
+    let isMuted = false;
+
+    const volumeSlider = document.getElementById('volume-slider');
+    const muteButton = document.getElementById('mute-button');
+
+    function initAudio() {
+        try {
+            if (!audioContext) {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                masterGainNode = audioContext.createGain();
+                masterGainNode.connect(audioContext.destination);
+                masterGainNode.gain.setValueAtTime(masterVolume, audioContext.currentTime);
+            }
+        } catch (e) {
+            console.warn("Web Audio API is not supported in this browser.");
+            // Disable audio UI if not supported
+            document.getElementById('audio-controls').style.display = 'none';
+        }
     }
 
-    /**
-     * Plays a synthesized sound using the Web Audio API.
-     * @param {object} options - The sound options.
-     * @param {number} [options.frequency=440] - The pitch of the sound in Hz.
-     * @param {number} [options.duration=0.1] - The duration of the sound in seconds.
-     * @param {number} [options.volume=0.3] - The volume (0 to 1).
-     * @param {string} [options.type='sine'] - The oscillator type ('sine', 'square', 'sawtooth', 'triangle').
-     */
-    function playSound({ frequency = 440, duration = 0.1, volume = 0.3, type = 'sine' }) {
-        if (!audioContext) return; // Don't play sound if the context couldn't be created.
+    function playSound({ frequency = 440, duration = 0.1, volume = 0.15, type = 'sine' }) {
+        if (!audioContext || !masterGainNode) return;
 
         const oscillator = audioContext.createOscillator();
         const gainNode = audioContext.createGain();
 
-        // Connect the nodes: oscillator -> gain -> speakers
+        // Connect nodes through the master gain
         oscillator.connect(gainNode);
-        gainNode.connect(audioContext.destination);
+        gainNode.connect(masterGainNode);
 
-        // Set sound properties
         oscillator.type = type;
         oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
-
-        // Set volume envelope to prevent harsh clicks
+        
         gainNode.gain.setValueAtTime(0, audioContext.currentTime);
-        gainNode.gain.linearRampToValueAtTime(volume, audioContext.currentTime + 0.01); // Quick fade-in
-        gainNode.gain.setValueAtTime(volume, audioContext.currentTime + duration - 0.02); // Hold volume
-        gainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime + duration); // Quick fade-out
+        gainNode.gain.linearRampToValueAtTime(volume, audioContext.currentTime + 0.01);
+        gainNode.gain.setValueAtTime(volume, audioContext.currentTime + duration - 0.02);
+        gainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime + duration);
 
-        // Start and stop the sound
         oscillator.start(audioContext.currentTime);
         oscillator.stop(audioContext.currentTime + duration);
     }
+
+    function updateMuteButtonUI() {
+        muteButton.textContent = isMuted ? '🔇' : '🔊';
+    }
+
+    volumeSlider.addEventListener('input', (e) => {
+        masterVolume = parseFloat(e.target.value);
+        if (masterGainNode) {
+            masterGainNode.gain.setValueAtTime(masterVolume, audioContext.currentTime);
+        }
+        isMuted = false;
+        updateMuteButtonUI();
+    });
+
+    muteButton.addEventListener('click', () => {
+        isMuted = !isMuted;
+        if (masterGainNode) {
+            if (isMuted) {
+                masterGainNode.gain.setValueAtTime(0, audioContext.currentTime);
+            } else {
+                masterGainNode.gain.setValueAtTime(masterVolume, audioContext.currentTime);
+            }
+        }
+        updateMuteButtonUI();
+    });
+    // --- End of Audio Setup ---
 
     // --- Game Settings & Configs ---
     const MAX_SPEED = 200;
@@ -142,7 +170,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function createPlayer(playerData) {
-        // Create Lane
         const laneContainer = document.createElement('div');
         laneContainer.className = 'lane-container';
         laneContainer.innerHTML = `
@@ -155,7 +182,6 @@ document.addEventListener('DOMContentLoaded', () => {
         `;
         raceTrack.appendChild(laneContainer);
 
-        // Create Controls
         const controlGroup = document.createElement('div');
         controlGroup.className = 'control-group';
         controlGroup.innerHTML = `
@@ -167,7 +193,6 @@ document.addEventListener('DOMContentLoaded', () => {
         `;
         controlsContainer.appendChild(controlGroup);
 
-        // Create Customization UI
         const customizeSection = document.createElement('div');
         customizeSection.className = 'customize-player-section';
         customizeSection.dataset.playerId = playerData.id;
@@ -183,14 +208,9 @@ document.addEventListener('DOMContentLoaded', () => {
         `;
         customizePlayerList.appendChild(customizeSection);
 
-        // Create Player Object and add to active list
         const playerObject = {
             ...playerData,
-            sprite: '🏇',
-            force: 0,
-            position: 0,
-            isKeyDown: false,
-            score: 0,
+            sprite: '🏇', force: 0, position: 0, isKeyDown: false, score: 0,
             laneElement: laneContainer,
             horseElement: laneContainer.querySelector('.horse'),
             forceBarElement: controlGroup.querySelector('.force-bar'),
@@ -210,13 +230,10 @@ document.addEventListener('DOMContentLoaded', () => {
             playerObject.force += incrementPerTap;
             if (playerObject.force > 100) playerObject.force = 100;
         };
-        const releaseAction = () => {
-            playerObject.isKeyDown = false;
-        };
+        const releaseAction = () => { playerObject.isKeyDown = false; };
 
         playerObject.controlsElement.addEventListener('mousedown', pressAction);
         playerObject.controlsElement.addEventListener('touchstart', pressAction, { passive: false });
-
         playerObject.controlsElement.addEventListener('mouseup', releaseAction);
         playerObject.controlsElement.addEventListener('mouseleave', releaseAction);
         playerObject.controlsElement.addEventListener('touchend', releaseAction);
@@ -226,8 +243,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     function updateGridLayout() {
         const numPlayers = activePlayers.length > 0 ? activePlayers.length : 1;
-        const gridTemplate = `repeat(${numPlayers}, 1fr)`;
-        controlsContainer.style.gridTemplateColumns = gridTemplate;
+        controlsContainer.style.gridTemplateColumns = `repeat(${numPlayers}, 1fr)`;
     }
 
     function updateGameReadyState() {
@@ -240,7 +256,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- Game Core ---
     function updateGameParameters() {
         if (currentDifficulty === 'manual') {
             incrementPerTap = parseInt(incrementSlider.value);
@@ -259,7 +274,6 @@ document.addEventListener('DOMContentLoaded', () => {
     function prepareGameBoard() {
         gameActive = false;
         updateGameParameters();
-
         logList.innerHTML = '';
         winnerAnnEl.innerHTML = '';
         winnerAnnEl.className = '';
@@ -279,7 +293,6 @@ document.addEventListener('DOMContentLoaded', () => {
             logMessage("⚠️ Add at least one player to start a game.");
             return;
         }
-        // Resume AudioContext if it was suspended
         if (audioContext && audioContext.state === 'suspended') {
             audioContext.resume();
         }
@@ -291,19 +304,17 @@ document.addEventListener('DOMContentLoaded', () => {
     function startCountdown(duration, textPrefix) {
         newGameButton.disabled = true;
         let count = duration;
-        
         countdownDisplay.textContent = `${textPrefix} ${count}`;
-        playSound({ frequency: 330, duration: 0.15, type: 'sine' }); // Play "3" sound
+        playSound({ frequency: 330, duration: 0.15, type: 'sine' });
 
         countdownInterval = setInterval(() => {
             count--;
             if (count > 0) {
                 countdownDisplay.textContent = `${textPrefix} ${count}`;
-                playSound({ frequency: 330, duration: 0.15, type: 'sine' }); // Play "2" and "1" sound
+                playSound({ frequency: 330, duration: 0.15, type: 'sine' });
             } else {
                 clearInterval(countdownInterval);
                 countdownDisplay.textContent = 'GO!';
-                // Play a higher, more distinct "GO" sound
                 playSound({ frequency: 523, duration: 0.3, type: 'square' }); 
                 
                 setTimeout(() => {
@@ -360,13 +371,11 @@ document.addEventListener('DOMContentLoaded', () => {
         logMessage(`📣🏆 The race is over! The winner is: ${winner.name}!`);
         winnerAnnEl.textContent = `${winner.name} Wins!`;
         winnerAnnEl.style.color = winner.color;
-        
         winner.score++;
         updateScoreDisplay();
         updateGameReadyState();
     }
     
-    // --- Event Handlers ---
     function handleKeyDown(e) {
         if (playerToChangeKey) return;
         if (e.key === 'h' || e.key === 'H') {
@@ -453,7 +462,6 @@ document.addEventListener('DOMContentLoaded', () => {
         playerToChangeKey = null;
     }
 
-    // --- Modals and UI ---
     function openModal(modal) {
         modalOverlay.classList.remove('hidden');
         modal.classList.remove('hidden');
@@ -472,9 +480,7 @@ document.addEventListener('DOMContentLoaded', () => {
         helpModal.classList.add('hidden');
     }
 
-    function openCustomizeModal() {
-        openModal(customizeModal);
-    }
+    function openCustomizeModal() { openModal(customizeModal); }
 
     function toggleHelpModal() {
         if (helpModal.classList.contains('hidden')) {
@@ -496,7 +502,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- Utility Functions ---
     function logMessage(message) {
         const li = document.createElement('li');
         li.textContent = message;
@@ -504,21 +509,16 @@ document.addEventListener('DOMContentLoaded', () => {
         logContainer.scrollTop = logContainer.scrollHeight;
     }
     function updateScoreDisplay() {
-        activePlayers.forEach(p => {
-            p.scoreElement.textContent = `Score: ${p.score}`;
-        });
+        activePlayers.forEach(p => { p.scoreElement.textContent = `Score: ${p.score}`; });
     }
     
-    // --- Event Listeners ---
     document.addEventListener('keydown', handleKeyDown);
     document.addEventListener('keyup', handleKeyUp);
     newGameButton.addEventListener('click', initGame);
     addPlayerButton.addEventListener('click', addPlayer);
-
     customizeToggleButton.addEventListener('click', openCustomizeModal);
     closeCustomizeModalButton.addEventListener('click', closeAllModals);
     customizeModal.addEventListener('click', handleCustomizeInteraction);
-
     closeHelpButton.addEventListener('click', closeAllModals);
     modalOverlay.addEventListener('click', closeAllModals);
     helpPrompt.addEventListener('click', toggleHelpModal);
@@ -544,7 +544,10 @@ document.addEventListener('DOMContentLoaded', () => {
             createPlayer(availablePlayers[1]);
         }
     }
-
+    
+    initAudio();
+    volumeSlider.value = masterVolume;
+    updateMuteButtonUI();
     initializeDefaultPlayers();
     updateGameParameters();
     populatePlayerDropdown();
