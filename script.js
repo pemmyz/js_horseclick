@@ -55,7 +55,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let lastTime = 0;
     let currentDifficulty = 'hard';
     let countdownInterval;
-    let playerToChangeKey = null; // To track which player is changing their key
+    let playerToChangeKey = null;
 
     // --- Player Management ---
     function populatePlayerDropdown() {
@@ -158,6 +158,28 @@ document.addEventListener('DOMContentLoaded', () => {
             keyDisplayElement: customizeSection.querySelector('.current-key-display')
         };
         activePlayers.push(playerObject);
+
+        // --- NEW: Add click/tap listeners to the control group ---
+        const pressAction = (e) => {
+            e.preventDefault();
+            if (!gameActive || playerObject.isKeyDown) return;
+
+            playerObject.isKeyDown = true;
+            playerObject.force += incrementPerTap;
+            if (playerObject.force > 100) playerObject.force = 100;
+        };
+        const releaseAction = () => {
+            playerObject.isKeyDown = false;
+        };
+
+        playerObject.controlsElement.addEventListener('mousedown', pressAction);
+        playerObject.controlsElement.addEventListener('touchstart', pressAction, { passive: false });
+
+        playerObject.controlsElement.addEventListener('mouseup', releaseAction);
+        playerObject.controlsElement.addEventListener('mouseleave', releaseAction);
+        playerObject.controlsElement.addEventListener('touchend', releaseAction);
+        // --- End of new listeners ---
+
         laneContainer.querySelector('.remove-player-btn').addEventListener('click', () => removePlayer(playerData.id));
     }
     
@@ -295,6 +317,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // --- Event Handlers ---
     function handleKeyDown(e) {
+        if (playerToChangeKey) return; // Don't trigger game actions while changing keys
         if (e.key === 'h' || e.key === 'H') {
             e.preventDefault();
             toggleHelpModal();
@@ -466,8 +489,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Initializations ---
     function initializeDefaultPlayers() {
         if (availablePlayers.length >= 2) {
-            createPlayer(availablePlayers[0]); // Add Player 1
-            createPlayer(availablePlayers[1]); // Add Player 2
+            createPlayer(availablePlayers[0]);
+            createPlayer(availablePlayers[1]);
         }
     }
 
