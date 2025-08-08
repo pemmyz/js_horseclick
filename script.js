@@ -23,6 +23,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const helpModal = document.getElementById('help-modal');
     const closeHelpButton = document.getElementById('close-help-button');
     const helpControlsList = document.getElementById('help-controls-list');
+    const helpPrompt = document.getElementById('help-prompt');
 
     // Difficulty
     const difficultyRadios = document.querySelectorAll('input[name="difficulty"]');
@@ -54,6 +55,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let lastTime = 0;
     let currentDifficulty = 'hard';
     let countdownInterval;
+    let playerToChangeKey = null; // To track which player is changing their key
 
     // --- Player Management ---
     function populatePlayerDropdown() {
@@ -130,6 +132,10 @@ document.addEventListener('DOMContentLoaded', () => {
             <div class="vehicle-selector">
                 ${vehicleOptions.map(v => `<button class="vehicle-btn" data-vehicle="${v}">${v}</button>`).join('')}
             </div>
+            <div class="key-config-area">
+                <div class="current-key-display">${playerData.keyDisplay}</div>
+                <button class="change-key-btn" data-player-id="${playerData.id}">Change Key</button>
+            </div>
         `;
         customizePlayerList.appendChild(customizeSection);
 
@@ -146,25 +152,20 @@ document.addEventListener('DOMContentLoaded', () => {
             forceBarElement: controlGroup.querySelector('.force-bar'),
             scoreElement: controlGroup.querySelector('.score'),
             controlsElement: controlGroup,
+            controlsTitleElement: controlGroup.querySelector('h3'),
             customizeElement: customizeSection,
-            currentVehicleElement: customizeSection.querySelector('.current-vehicle')
+            currentVehicleElement: customizeSection.querySelector('.current-vehicle'),
+            keyDisplayElement: customizeSection.querySelector('.current-key-display')
         };
         activePlayers.push(playerObject);
         laneContainer.querySelector('.remove-player-btn').addEventListener('click', () => removePlayer(playerData.id));
     }
     
-    // --- CHANGE START ---
     function updateGridLayout() {
         const numPlayers = activePlayers.length > 0 ? activePlayers.length : 1;
         const gridTemplate = `repeat(${numPlayers}, 1fr)`;
-        
-        // This line was removed, as the racetrack is now stacked vertically via CSS
-        // raceTrack.style.gridTemplateColumns = gridTemplate; 
-
-        // The controls container still uses the dynamic grid
         controlsContainer.style.gridTemplateColumns = gridTemplate;
     }
-    // --- CHANGE END ---
 
     function updateGameReadyState() {
         const canStart = activePlayers.length > 0;
@@ -327,6 +328,8 @@ document.addEventListener('DOMContentLoaded', () => {
     
     function handleCustomizeInteraction(e) {
         const vehicleBtn = e.target.closest('.vehicle-btn');
+        const keyBtn = e.target.closest('.change-key-btn');
+
         if (vehicleBtn) {
             const vehicle = vehicleBtn.dataset.vehicle;
             const section = e.target.closest('.customize-player-section');
@@ -337,7 +340,43 @@ document.addEventListener('DOMContentLoaded', () => {
                 player.currentVehicleElement.textContent = vehicle;
                 player.horseElement.innerHTML = vehicle;
             }
+        } else if (keyBtn && !playerToChangeKey) {
+            startKeyChange(keyBtn);
         }
+    }
+
+    function startKeyChange(button) {
+        const playerId = button.dataset.playerId;
+        playerToChangeKey = activePlayers.find(p => p.id === playerId);
+        button.textContent = 'Press any key...';
+        button.classList.add('is-listening');
+        document.addEventListener('keydown', handleKeySelection, { once: true });
+    }
+    
+    function getKeyDisplay(e) {
+        if (e.key === ' ') return 'Space';
+        if (e.key.includes('Arrow')) return e.key.replace('Arrow', '') + ' Arrow';
+        return e.key.length === 1 ? e.key.toUpperCase() : e.key;
+    }
+
+    function handleKeySelection(e) {
+        e.preventDefault();
+        const newKey = e.key.toLowerCase();
+        const newKeyDisplay = getKeyDisplay(e);
+
+        if (activePlayers.some(p => p.key === newKey && p.id !== playerToChangeKey.id)) {
+            alert(`Key "${newKeyDisplay}" is already in use. Please choose another.`);
+        } else {
+            playerToChangeKey.key = newKey;
+            playerToChangeKey.keyDisplay = newKeyDisplay;
+            playerToChangeKey.keyDisplayElement.textContent = newKeyDisplay;
+            playerToChangeKey.controlsTitleElement.textContent = `${playerToChangeKey.name} (${newKeyDisplay})`;
+        }
+        
+        const button = playerToChangeKey.customizeElement.querySelector('.change-key-btn');
+        button.textContent = 'Change Key';
+        button.classList.remove('is-listening');
+        playerToChangeKey = null;
     }
 
     // --- Modals and UI ---
@@ -347,6 +386,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     function closeAllModals() {
+        if (playerToChangeKey) {
+            const button = playerToChangeKey.customizeElement.querySelector('.change-key-btn');
+            button.textContent = 'Change Key';
+            button.classList.remove('is-listening');
+            playerToChangeKey = null;
+            document.removeEventListener('keydown', handleKeySelection);
+        }
         modalOverlay.classList.add('hidden');
         customizeModal.classList.add('hidden');
         helpModal.classList.add('hidden');
@@ -401,6 +447,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     closeHelpButton.addEventListener('click', closeAllModals);
     modalOverlay.addEventListener('click', closeAllModals);
+    helpPrompt.addEventListener('click', toggleHelpModal);
     
     difficultyRadios.forEach(radio => radio.addEventListener('change', (e) => {
         currentDifficulty = e.target.value;
@@ -417,9 +464,17 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // --- Initializations ---
+    function initializeDefaultPlayers() {
+        if (availablePlayers.length >= 2) {
+            createPlayer(availablePlayers[0]); // Add Player 1
+            createPlayer(availablePlayers[1]); // Add Player 2
+        }
+    }
+
+    initializeDefaultPlayers();
     updateGameParameters();
     populatePlayerDropdown();
     updateGridLayout();
     updateGameReadyState();
-    logMessage("Welcome! Add players and click 'New Game' to begin.");
+    logMessage("Welcome! Two players are ready. Click 'New Game' to begin.");
 });

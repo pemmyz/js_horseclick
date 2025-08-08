@@ -110,16 +110,16 @@ h4 {
 #modal-overlay {
     position: fixed;
     top: 0; left: 0; right: 0; bottom: 0;
-    background-color: rgba(0, 0, 0, 0.7);
+    background-color: rgba(0, 0, 0, 0.5); /* Lighter greyed-out effect */
     z-index: 1000;
 }
 
-#customize-modal {
+#customize-modal, #help-modal {
     position: fixed;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    background-color: #222223; /* Darker grey background */
+    background-color: var(--container-bg);
     padding: 2rem;
     border: 1px solid var(--border-color);
     border-radius: 8px;
@@ -127,21 +127,6 @@ h4 {
     width: 90%;
     max-width: 600px;
 }
-
-#help-modal {
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background-color: var(--container-bg); /* Original background */
-    padding: 2rem;
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    z-index: 1001;
-    width: 90%;
-    max-width: 600px;
-}
-
 .modal-content {
     position: relative;
 }
@@ -216,7 +201,7 @@ h4 {
     justify-content: center;
     align-items: center;
     gap: 10px;
-    margin-top: 10px;
+    margin-top: 15px;
 }
 .current-key-display {
     font-weight: bold;
