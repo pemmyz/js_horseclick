@@ -6,9 +6,7 @@
     --border-color: #3c3c3c;
     --title-color: #569cd6;
     --accent-color: #ce9178;
-    --p1-color: #ff8a65;
-    --p2-color: #64b5f6;
-    --force-bar-bg: #3a3a5e;
+    /* Removed player-specific colors to be set by JS */
 }
 
 body {
@@ -33,7 +31,7 @@ body {
     border-radius: 8px;
     padding: 1.5rem 2rem;
     width: 90%;
-    max-width: 900px;
+    max-width: 1100px; /* Increased max-width for 4 players */
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
 }
 
@@ -55,7 +53,35 @@ h4 {
     justify-content: space-between;
     align-items: center;
     margin-bottom: 1rem;
+    flex-wrap: wrap;
+    gap: 1rem;
 }
+.top-bar h1 {
+    flex-grow: 1;
+    text-align: left;
+    border: none;
+    padding: 0;
+}
+
+/* NEW: Player Management Styles */
+#player-management {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+#player-select, #add-player-button {
+    padding: 0.5rem;
+    font-size: 0.9rem;
+    background-color: #3a3d41;
+    border: 1px solid #4a4a4a;
+    color: var(--text-color);
+    border-radius: 5px;
+}
+#add-player-button {
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+#add-player-button:hover:not(:disabled) { background-color: #4a4d51; }
 
 .top-buttons {
     display: flex;
@@ -71,7 +97,7 @@ h4 {
     font-size: 1rem;
     transition: background-color 0.2s, opacity 0.2s;
 }
-#new-game-button:disabled {
+#new-game-button:disabled, #add-player-button:disabled {
     background-color: #555;
     border-color: #444;
     cursor: not-allowed;
@@ -91,7 +117,7 @@ h4 {
     z-index: 1000;
 }
 
-#customize-modal {
+#customize-modal, #help-modal {
     position: fixed;
     top: 50%;
     left: 50%;
@@ -102,7 +128,7 @@ h4 {
     border-radius: 8px;
     z-index: 1001;
     width: 90%;
-    max-width: 500px;
+    max-width: 600px;
 }
 .modal-content {
     position: relative;
@@ -131,10 +157,14 @@ h4 {
 .customize-player-section {
     text-align: center;
     margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px dashed var(--border-color);
 }
-.customize-player-section:last-child {
+#customize-player-list .customize-player-section:last-child {
+    border-bottom: none;
     margin-bottom: 0;
 }
+
 .customize-player-section h4 {
     border: none;
     font-size: 1.2em;
@@ -161,119 +191,146 @@ h4 {
     display: flex;
     align-items: center;
     justify-content: center;
-}
-.vehicle-btn:hover { background-color: #4a4d51; }
-
-/* --- CHANGE START --- */
-/* Mirror vehicle emoticons for both players */
-.vehicle-selector .vehicle-btn,
-#p1-current-vehicle,
-#p2-current-vehicle {
     transform: scaleX(-1);
 }
-
-#p1-current-vehicle,
-#p2-current-vehicle {
-    /* Ensures the transform applies correctly to the span element */
+.vehicle-btn:hover { background-color: #4a4d51; }
+.current-vehicle {
+    transform: scaleX(-1);
     display: inline-block;
 }
-/* --- CHANGE END --- */
 
-/* NEW: Control Config Styles */
-.control-config-section {
-    margin-top: 2rem;
-    padding-top: 1.5rem;
-    border-top: 1px solid var(--border-color);
-}
-.control-config-section h4 {
-    border: none;
-}
-.control-options {
-    display: flex;
-    justify-content: center;
-    gap: 15px;
-    flex-wrap: wrap;
-}
-.control-options label {
-    cursor: pointer;
-    padding: 5px 8px;
-    border-radius: 4px;
-    transition: background-color 0.2s;
-}
-.control-options label:hover {
-    background-color: var(--force-bar-bg);
-}
-
+/* --- Difficulty & Settings --- */
 .difficulty-settings, .manual-controls-area {
     margin-bottom: 1rem; padding: 1rem; border: 1px solid var(--border-color);
     border-radius: 8px; background-color: var(--bg-color);
 }
-.difficulty-settings h3, .manual-controls-area h4 {
-    margin-bottom: 10px; font-size: 1.1em; border: none; text-align: left;
-}
-.difficulty-options {
-    display: flex; justify-content: center; gap: 15px; flex-wrap: wrap;
-}
-.difficulty-options label {
-    cursor: pointer; padding: 5px 8px; border-radius: 4px; transition: background-color 0.2s;
-}
+/* ... (rest of difficulty styles are unchanged) */
+.difficulty-settings h3, .manual-controls-area h4 { margin-bottom: 10px; font-size: 1.1em; border: none; text-align: left; }
+.difficulty-options { display: flex; justify-content: center; gap: 15px; flex-wrap: wrap; }
+.difficulty-options label { cursor: pointer; padding: 5px 8px; border-radius: 4px; transition: background-color 0.2s; }
 .difficulty-options label:hover { background-color: var(--force-bar-bg); }
 .difficulty-options input[type="radio"] { margin-right: 5px; }
-
-.settings-group {
-    display: flex; align-items: center; justify-content: space-between;
-    margin-bottom: 10px; gap: 10px;
-}
+.settings-group { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; gap: 10px; }
 .settings-group label { font-size: 0.9em; flex-shrink: 0; }
 .settings-group input[type="range"] { flex-grow: 1; max-width: 300px; }
 .settings-group span { font-weight: bold; min-width: 30px; text-align: left; color: var(--accent-color); }
-
 input[type=range] { -webkit-appearance: none; appearance: none; background: transparent; cursor: pointer; }
 input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; border: 1px solid var(--border-color); height: 18px; width: 18px; border-radius: 50%; background: var(--title-color); margin-top: -7px; }
 input[type=range]::-moz-range-thumb { border: 1px solid var(--border-color); height: 18px; width: 18px; border-radius: 50%; background: var(--title-color); }
 input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 5px; cursor: pointer; background: var(--track-bg); border-radius: 3px; border: 1px solid var(--border-color); }
 input[type=range]::-moz-range-track { width: 100%; height: 5px; cursor: pointer; background: var(--track-bg); border-radius: 3px; border: 1px solid var(--border-color); }
 
-/* --- FIX STARTS HERE --- */
+/* --- Game Area --- */
 #countdown-display {
-    font-size: 4em;
-    font-weight: bold;
-    color: var(--accent-color);
-    text-align: center;
-    /* Changed from 'min-height' to a fixed 'height'. This forces the element
-       to reserve its vertical space at all times, preventing the layout below
-       it from shifting when text content is added or removed. */
-    height: 1.2em;
-    /* Added flex properties to vertically center the text (like "GO!")
-       within the element's now-fixed height for better presentation. */
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin-bottom: 0.5rem;
-    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+    font-size: 4em; font-weight: bold; color: var(--accent-color); text-align: center;
+    height: 1.2em; display: flex; align-items: center; justify-content: center;
+    margin-bottom: 0.5rem; text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
 }
-/* --- FIX ENDS HERE --- */
 
-.instructions { text-align: center; color: var(--accent-color); margin-bottom: 1.5rem; font-style: italic; }
-#race-track { background-color: #1a1a1a; padding: 1rem; border-radius: 4px; margin-bottom: 1.5rem; border: 1px solid #333; position: relative; overflow: hidden; }
-.lane { position: relative; height: 50px; background-color: var(--track-bg); border-radius: 3px; margin-bottom: 10px; border: 1px solid #444; display: flex; align-items: center; }
-.lane:last-child { margin-bottom: 0; }
+#winner-announcement { font-size: 2.5em; font-weight: bold; text-align: center; padding: 1rem; margin-bottom: 1rem; min-height: 2.5em; }
+
+/* MODIFIED: Layouts for Race Track and Controls */
+#race-track, #controls {
+    display: grid;
+    gap: 1.5rem;
+    margin-bottom: 1.5rem;
+    /* grid-template-columns is now set dynamically via JS */
+}
+#race-track { background-color: #1a1a1a; padding: 1rem; border-radius: 4px; border: 1px solid #333; position: relative; overflow: hidden; }
+
+/* NEW: Lane container and label */
+.lane-container {
+    position: relative;
+}
+.lane-label {
+    text-align: center;
+    font-weight: bold;
+    margin-bottom: 8px;
+    font-size: 1.1em;
+}
+
+.lane {
+    position: relative; height: 50px; background-color: var(--track-bg);
+    border-radius: 3px; border: 1px solid #444; display: flex; align-items: center;
+}
 .lane .finish-line { position: absolute; right: 10px; top: 0; height: 100%; font-size: 2rem; display: flex; align-items: center; justify-content: center; }
 .horse { position: absolute; top: 25%; transform: translateY(-50%) scaleX(-1); font-size: 1.8rem; z-index: 10; }
-#player1-horse { color: var(--p1-color); }
-#player2-horse { color: var(--p2-color); }
-#controls { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem; }
-.control-group { text-align: center; border: 2px solid var(--border-color); padding: 1rem; border-radius: 5px; background-color: var(--container-bg); display: flex; flex-direction: column; align-items: center; }
-.control-group h3 { border: none; height: auto; margin-bottom: 10px; }
+.remove-player-btn {
+    position: absolute;
+    top: -2px;
+    right: -2px;
+    background: #c13434;
+    color: white;
+    border: 1px solid #a02a2a;
+    border-radius: 50%;
+    width: 22px;
+    height: 22px;
+    font-size: 14px;
+    line-height: 20px;
+    text-align: center;
+    cursor: pointer;
+    z-index: 20;
+    font-weight: bold;
+}
+.remove-player-btn:hover { background: #e04343; }
+
+.control-group {
+    text-align: center; border: 2px solid var(--border-color); padding: 1rem;
+    border-radius: 5px; background-color: var(--container-bg);
+    display: flex; flex-direction: column; align-items: center;
+}
+.control-group h3 { border: none; height: auto; margin-bottom: 10px; font-size: 1.1em; }
 .score { color: var(--accent-color); font-weight: bold; font-size: 1.1rem; margin-top: 0; margin-bottom: 0.5rem; }
 .force-container { width: 40px; height: 150px; background-color: var(--force-bar-bg); border: 1px solid var(--border-color); border-radius: 8px; position: relative; overflow: hidden; display: flex; flex-direction: column-reverse; margin: 10px auto; }
 .force-bar { width: 100%; height: 0%; transition: height 0.05s ease-out; border-radius: 6px 6px 0 0; }
-#player1-force-bar { background-color: var(--p1-color); }
-#player2-force-bar { background-color: var(--p2-color); }
+
+/* --- Log and Help Styles --- */
 #log-container { background-color: var(--bg-color); border: 1px solid var(--border-color); border-radius: 5px; padding: 1rem; height: 150px; overflow-y: auto; }
 #log-list { list-style: none; padding: 0; margin: 0; }
 #log-list li { padding: 0.3rem 0.5rem; border-bottom: 1px dashed #333; font-family: 'Consolas', 'Courier New', monospace; word-break: break-word; }
 #log-list li:last-child { border-bottom: none; }
-#winner-announcement { font-size: 2.5em; font-weight: bold; text-align: center; padding: 1rem; margin-bottom: 1rem; min-height: 2.5em; }
-.player1-win { color: var(--p1-color); }
-.player2-win { color: var(--p2-color); }
+
+#help-prompt {
+    position: fixed;
+    bottom: 10px;
+    left: 10px;
+    background-color: rgba(0, 0, 0, 0.6);
+    color: #ccc;
+    padding: 6px 12px;
+    border-radius: 5px;
+    font-size: 0.9em;
+    font-style: italic;
+    z-index: 500;
+    border: 1px solid var(--border-color);
+}
+#help-modal .modal-content h2, #help-modal .modal-content h3 {
+    text-align: left;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 0.5rem;
+    margin-bottom: 1rem;
+}
+#help-modal .modal-content h3 { font-size: 1.2rem; color: var(--accent-color); border: none; }
+#help-modal p { line-height: 1.6; margin-bottom: 1.5rem; }
+#help-controls-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+}
+.help-control-item {
+    background-color: var(--bg-color);
+    padding: 1rem;
+    border-radius: 5px;
+    border: 1px solid var(--border-color);
+}
+.help-control-item p { margin: 0; }
+.help-control-item .key {
+    font-weight: bold;
+    color: var(--title-color);
+    background-color: var(--track-bg);
+    padding: 2px 6px;
+    border-radius: 3px;
+    border: 1px solid var(--border-color);
+    font-family: 'Consolas', 'Courier New', monospace;
+    display: inline-block;
+    margin-left: 8px;
+}

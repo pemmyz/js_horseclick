@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="fi">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -11,6 +11,11 @@
     <div id="game-container">
         <div class="top-bar">
             <h1>Hevoskisat Clicker Challenge</h1>
+            <!-- NEW: Player Management UI -->
+            <div id="player-management">
+                <select id="player-select"></select>
+                <button id="add-player-button">Add Player</button>
+            </div>
             <div class="top-buttons">
                 <button id="new-game-button">New Game 🚀</button>
                 <button id="customize-toggle-button">Customize ⚙️</button>
@@ -30,48 +35,26 @@
         <div id="manual-controls" class="manual-controls-area hidden">
             <h4>Manual Settings (applies on New Game)</h4>
             <div class="settings-group">
-                <label for="increment-slider">Tap Power (<span id="increment-value-display">12</span>): </label>
-                <input type="range" id="increment-slider" min="5" max="25" value="12">
+                <label for="increment-slider">Tap Power (<span id="increment-value-display">8</span>): </label>
+                <input type="range" id="increment-slider" min="5" max="25" value="8">
             </div>
             <div class="settings-group">
-                <label for="drain-rate-slider">Force Drain (<span id="drain-rate-value-display">0.4</span>): </label>
-                <input type="range" id="drain-rate-slider" min="1" max="10" value="4"> <!-- Maps to 0.1 - 1.0 -->
+                <label for="drain-rate-slider">Force Drain (<span id="drain-rate-value-display">0.7</span>): </label>
+                <input type="range" id="drain-rate-slider" min="1" max="10" value="7"> <!-- Maps to 0.1 - 1.0 -->
             </div>
         </div>
 
         <div id="winner-announcement"></div>
+        <div id="countdown-display">Add a player to begin!</div>
         
-        <!-- UPDATED: Added the initial text here -->
-        <div id="countdown-display">Press New game to start</div>
-        
-        <p class="instructions">Player 1: Tap 'W' Key! | Player 2: Tap 'UP ARROW' Key!</p>
+        <!-- REMOVED: Static instructions paragraph is no longer needed -->
         
         <div id="race-track">
-            <div id="player1-lane" class="lane">
-                <div id="player1-horse" class="horse">🏇</div>
-                <div class="finish-line">🏁</div>
-            </div>
-            <div id="player2-lane" class="lane">
-                 <div id="player2-horse" class="horse">🏇</div>
-                 <div class="finish-line">🏁</div>
-            </div>
+            <!-- Player lanes will be added here by JS -->
         </div>
 
         <div id="controls">
-            <div id="player1-controls" class="control-group">
-                <p class="score" id="p1-score">Score: 0</p>
-                <h3 id="p1-title">Player 1 (W Key)</h3>
-                <div class="force-container">
-                    <div id="player1-force-bar" class="force-bar"></div>
-                </div>
-            </div>
-            <div id="player2-controls" class="control-group">
-                <p class="score" id="p2-score">Score: 0</p>
-                <h3 id="p2-title">Player 2 (Up Arrow)</h3>
-                <div class="force-container">
-                    <div id="player2-force-bar" class="force-bar"></div>
-                </div>
-            </div>
+            <!-- Player control groups will be added here by JS -->
         </div>
 
         <div id="log-container">
@@ -80,42 +63,38 @@
         </div>
     </div>
 
-    <!-- Modal Structure -->
+    <!-- Modal Overlay (shared by all modals) -->
     <div id="modal-overlay" class="hidden"></div>
+
+    <!-- Customize Modal -->
     <div id="customize-modal" class="hidden">
         <div class="modal-content">
             <button id="close-modal-button" class="close-button">×</button>
-            <h2>Customize</h2>
-            <div class="customize-player-section">
-                <h4>Player 1 Vehicle: <span id="p1-current-vehicle">🏇</span></h4>
-                <div class="vehicle-selector" id="p1-vehicle-selector">
-                    <button class="vehicle-btn" data-vehicle="🏇">🏇</button>
-                    <button class="vehicle-btn" data-vehicle="🏎">🏎</button>
-                    <button class="vehicle-btn" data-vehicle="🎠">🎠</button>
-                    <button class="vehicle-btn" data-vehicle="🏃‍♂️">🏃‍♂️</button>
-                    <button class="vehicle-btn" data-vehicle="🚴‍♀️">🚴‍♀️</button>
-                </div>
-            </div>
-            <div class="customize-player-section">
-                <h4>Player 2 Vehicle: <span id="p2-current-vehicle">🏇</span></h4>
-                <div class="vehicle-selector" id="p2-vehicle-selector">
-                    <button class="vehicle-btn" data-vehicle="🏇">🏇</button>
-                    <button class="vehicle-btn" data-vehicle="🏎">🏎</button>
-                    <button class="vehicle-btn" data-vehicle="🎠">🎠</button>
-                    <button class="vehicle-btn" data-vehicle="🏃‍♂️">🏃‍♂️</button>
-                    <button class="vehicle-btn" data-vehicle="🚴‍♀️">🚴‍♀️</button>
-                </div>
-            </div>
+            <h2>Customize Vehicles</h2>
+            <!-- Sections for each player's vehicle will be added here by JS -->
+            <div id="customize-player-list"></div>
+        </div>
+    </div>
 
-            <div class="control-config-section">
-                <h4>Control Scheme</h4>
-                <div class="control-options">
-                    <label><input type="radio" name="controls" value="wasd-arrow" checked> W / Up Arrow</label>
-                    <label><input type="radio" name="controls" value="shift-num"> Shift / Numpad Enter</label>
-                </div>
+    <!-- NEW: Help Modal -->
+    <div id="help-modal" class="hidden">
+        <div class="modal-content">
+            <button id="close-help-button" class="close-button">×</button>
+            <h2>How to Play</h2>
+            <h3>Goal</h3>
+            <p>Be the first player to get your vehicle across the finish line! 🏁</p>
+            <h3>Gameplay</h3>
+            <p>Press your assigned key as quickly as you can to build up force. The more force you have, the faster your vehicle will move. But be careful, your force drains over time, so you need to keep tapping!</p>
+            <h3>Active Player Controls</h3>
+            <div id="help-controls-list">
+                <!-- Player controls will be listed here by JS -->
             </div>
         </div>
     </div>
+    
+    <!-- NEW: Help Prompt -->
+    <div id="help-prompt">Press H key for Help</div>
+
 
     <script src="script.js"></script>
 </body>

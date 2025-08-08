@@ -1,32 +1,30 @@
 document.addEventListener('DOMContentLoaded', () => {
-    // --- DOM Elements ---
-    const player1Horse = document.getElementById('player1-horse');
-    const player2Horse = document.getElementById('player2-horse');
-    const player1Lane = document.getElementById('player1-lane');
-    const player2Lane = document.getElementById('player2-lane');
-    const p1ForceBar = document.getElementById('player1-force-bar');
-    const p2ForceBar = document.getElementById('player2-force-bar');
+    // --- DOM Element References ---
+    const raceTrack = document.getElementById('race-track');
+    const controlsContainer = document.getElementById('controls');
     const winnerAnnEl = document.getElementById('winner-announcement');
     const newGameButton = document.getElementById('new-game-button');
     const logList = document.getElementById('log-list');
     const logContainer = document.getElementById('log-container');
-    const p1ScoreDisplay = document.getElementById('p1-score');
-    const p2ScoreDisplay = document.getElementById('p2-score');
-    const p1Title = document.getElementById('p1-title');
-    const p2Title = document.getElementById('p2-title');
-
-    // Countdown Element
     const countdownDisplay = document.getElementById('countdown-display');
 
-    // Modal & Customization Elements
+    // Player Management
+    const playerSelect = document.getElementById('player-select');
+    const addPlayerButton = document.getElementById('add-player-button');
+    
+    // Modals & Customization
     const customizeToggleButton = document.getElementById('customize-toggle-button');
     const modalOverlay = document.getElementById('modal-overlay');
     const customizeModal = document.getElementById('customize-modal');
-    const closeModalButton = document.getElementById('close-modal-button');
-    const p1CurrentVehicle = document.getElementById('p1-current-vehicle');
-    const p2CurrentVehicle = document.getElementById('p2-current-vehicle');
+    const closeCustomizeModalButton = document.getElementById('close-modal-button');
+    const customizePlayerList = document.getElementById('customize-player-list');
     
-    // Difficulty Elements
+    // Help Screen
+    const helpModal = document.getElementById('help-modal');
+    const closeHelpButton = document.getElementById('close-help-button');
+    const helpControlsList = document.getElementById('help-controls-list');
+
+    // Difficulty
     const difficultyRadios = document.querySelectorAll('input[name="difficulty"]');
     const manualControlsArea = document.getElementById('manual-controls');
     const incrementSlider = document.getElementById('increment-slider');
@@ -41,24 +39,138 @@ document.addEventListener('DOMContentLoaded', () => {
         medium: { increment: 12, drainRate: 0.4, drainSlider: 4 },
         hard:   { increment: 8,  drainRate: 0.7, drainSlider: 7 }
     };
-    const controlConfigs = {
-        'wasd-arrow': { player1: 'w', player2: 'arrowup', p1Display: 'W Key', p2Display: 'Up Arrow' },
-        'shift-num': { player1: 'shift', player2: 'numpadenter', p1Display: 'Shift', p2Display: 'Numpad Enter' }
-    };
+    const availablePlayers = [
+        { id: 'p1', name: 'Player 1', key: 'w', keyDisplay: 'W', color: '#ff8a65' },
+        { id: 'p2', name: 'Player 2', key: 'arrowup', keyDisplay: 'Up Arrow', color: '#64b5f6' },
+        { id: 'p3', name: 'Player 3', key: 'l', keyDisplay: 'L', color: '#81c784' },
+        { id: 'p4', name: 'Player 4', key: 'p', keyDisplay: 'P', color: '#ffd54f' }
+    ];
+    const vehicleOptions = ['🏇', '🏎', '🎠', '🏃‍♂️', '🚴‍♀️'];
 
     // --- Game State ---
-    let p1Sprite = '🏇', p2Sprite = '🏇';
     let drainRate, incrementPerTap;
-    let p1, p2, players;
+    let activePlayers = [];
     let gameActive = false;
     let lastTime = 0;
-    let p1Score = 0, p2Score = 0;
     let currentDifficulty = 'hard';
-    let currentControlScheme = 'wasd-arrow';
     let countdownInterval;
-    // REMOVED: isFirstGame flag is no longer needed.
-    // let isFirstGame = true; 
 
+    // --- Player Management ---
+    function populatePlayerDropdown() {
+        playerSelect.innerHTML = '';
+        const unselectedPlayers = availablePlayers.filter(ap => !activePlayers.some(p => p.id === ap.id));
+        unselectedPlayers.forEach(p => {
+            const option = document.createElement('option');
+            option.value = p.id;
+            option.textContent = p.name;
+            playerSelect.appendChild(option);
+        });
+        addPlayerButton.disabled = unselectedPlayers.length === 0 || activePlayers.length >= 4;
+    }
+
+    function addPlayer() {
+        if (playerSelect.value) {
+            const playerData = availablePlayers.find(p => p.id === playerSelect.value);
+            if (!playerData) return;
+
+            createPlayer(playerData);
+            populatePlayerDropdown();
+            updateGridLayout();
+            updateGameReadyState();
+        }
+    }
+
+    function removePlayer(playerId) {
+        const playerIndex = activePlayers.findIndex(p => p.id === playerId);
+        if (playerIndex > -1) {
+            const player = activePlayers[playerIndex];
+            player.laneElement.remove();
+            player.controlsElement.remove();
+            player.customizeElement.remove();
+            activePlayers.splice(playerIndex, 1);
+            
+            populatePlayerDropdown();
+            updateGridLayout();
+            updateGameReadyState();
+        }
+    }
+
+    function createPlayer(playerData) {
+        // Create Lane
+        const laneContainer = document.createElement('div');
+        laneContainer.className = 'lane-container';
+        laneContainer.innerHTML = `
+            <div class="lane-label" style="color: ${playerData.color};">${playerData.name}</div>
+            <div class="lane" id="${playerData.id}-lane">
+                <div id="${playerData.id}-horse" class="horse" style="color: ${playerData.color};">🏇</div>
+                <div class="finish-line">🏁</div>
+            </div>
+            <button class="remove-player-btn" data-player-id="${playerData.id}" title="Remove Player">×</button>
+        `;
+        raceTrack.appendChild(laneContainer);
+
+        // Create Controls
+        const controlGroup = document.createElement('div');
+        controlGroup.className = 'control-group';
+        controlGroup.innerHTML = `
+            <p class="score" id="${playerData.id}-score">Score: 0</p>
+            <h3 style="color: ${playerData.color};">${playerData.name} (${playerData.keyDisplay})</h3>
+            <div class="force-container">
+                <div id="${playerData.id}-force-bar" class="force-bar" style="background-color: ${playerData.color};"></div>
+            </div>
+        `;
+        controlsContainer.appendChild(controlGroup);
+
+        // Create Customization UI
+        const customizeSection = document.createElement('div');
+        customizeSection.className = 'customize-player-section';
+        customizeSection.dataset.playerId = playerData.id;
+        customizeSection.innerHTML = `
+            <h4 style="color: ${playerData.color};">${playerData.name} Vehicle: <span class="current-vehicle">🏇</span></h4>
+            <div class="vehicle-selector">
+                ${vehicleOptions.map(v => `<button class="vehicle-btn" data-vehicle="${v}">${v}</button>`).join('')}
+            </div>
+        `;
+        customizePlayerList.appendChild(customizeSection);
+
+        // Create Player Object and add to active list
+        const playerObject = {
+            ...playerData,
+            sprite: '🏇',
+            force: 0,
+            position: 0,
+            isKeyDown: false,
+            score: 0,
+            laneElement: laneContainer,
+            horseElement: laneContainer.querySelector('.horse'),
+            forceBarElement: controlGroup.querySelector('.force-bar'),
+            scoreElement: controlGroup.querySelector('.score'),
+            controlsElement: controlGroup,
+            customizeElement: customizeSection,
+            currentVehicleElement: customizeSection.querySelector('.current-vehicle')
+        };
+        activePlayers.push(playerObject);
+        laneContainer.querySelector('.remove-player-btn').addEventListener('click', () => removePlayer(playerData.id));
+    }
+    
+    function updateGridLayout() {
+        const numPlayers = activePlayers.length > 0 ? activePlayers.length : 1;
+        const gridTemplate = `repeat(${numPlayers}, 1fr)`;
+        raceTrack.style.gridTemplateColumns = gridTemplate;
+        controlsContainer.style.gridTemplateColumns = gridTemplate;
+    }
+
+    function updateGameReadyState() {
+        const canStart = activePlayers.length > 0;
+        newGameButton.disabled = !canStart;
+        if (!canStart) {
+            countdownDisplay.textContent = 'Add a player to begin!';
+        } else if (!gameActive) {
+            countdownDisplay.textContent = 'Press New Game to start';
+        }
+    }
+
+    // --- Game Core ---
     function updateGameParameters() {
         if (currentDifficulty === 'manual') {
             incrementPerTap = parseInt(incrementSlider.value);
@@ -73,46 +185,30 @@ document.addEventListener('DOMContentLoaded', () => {
         incrementValueDisplay.textContent = incrementSlider.value;
         drainRateValueDisplay.textContent = (parseFloat(drainRateSlider.value) / 10).toFixed(1);
     }
-
-    function updatePlayerTitles() {
-        const config = controlConfigs[currentControlScheme];
-        p1Title.textContent = `Player 1 (${config.p1Display})`;
-        p2Title.textContent = `Player 2 (${config.p2Display})`;
-    }
-
-    function handleDifficultyChange(event) {
-        currentDifficulty = event.target.value;
-        manualControlsArea.classList.toggle('hidden', currentDifficulty !== 'manual');
-        updateGameParameters();
-    }
-
-    function createPlayer(id, name, horseEl, laneEl, forceBarEl, sprite) {
-        return { id, name, horseEl, laneEl, forceBarEl, sprite, force: 0, position: 0, isKeyDown: false };
-    }
     
     function prepareGameBoard() {
         gameActive = false;
         updateGameParameters();
 
-        p1 = createPlayer('p1', 'Player 1', player1Horse, player1Lane, p1ForceBar, p1Sprite);
-        p2 = createPlayer('p2', 'Player 2', player2Horse, player2Lane, p2ForceBar, p2Sprite);
-        players = [p1, p2];
-
         logList.innerHTML = '';
         winnerAnnEl.innerHTML = '';
         winnerAnnEl.className = '';
-        // UPDATED: Set the text here to reset it after a game finishes.
-        countdownDisplay.textContent = 'Press New game to start';
-        updateScoreDisplay();
+        updateGameReadyState();
         
-        players.forEach(p => {
-            p.horseEl.innerHTML = p.sprite;
-            p.horseEl.style.transform = `translateX(0px) scaleX(-1)`;
-            p.forceBarEl.style.height = '0%';
+        activePlayers.forEach(p => {
+            p.horseElement.innerHTML = p.sprite;
+            p.horseElement.style.transform = `translateX(0px) scaleX(-1)`;
+            p.forceBarElement.style.height = '0%';
+            p.position = 0;
+            p.force = 0;
         });
     }
 
     function initGame() {
+        if (activePlayers.length === 0) {
+            logMessage("⚠️ Add at least one player to start a game.");
+            return;
+        }
         if (countdownInterval) clearInterval(countdownInterval);
         prepareGameBoard();
         startCountdown(3, 'Game starting in:');
@@ -139,7 +235,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function startGame() {
-        logMessage("📣🏁 The race has begun! Tap to run!");
+        logMessage(`📣🏁 The race has begun! ${activePlayers.length} player(s) are off!`);
         gameActive = true;
         lastTime = 0;
         newGameButton.disabled = false;
@@ -152,15 +248,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const deltaTime = (currentTime - lastTime) / 1000;
         lastTime = currentTime;
 
-        players.forEach(p => {
+        activePlayers.forEach(p => {
             if (p.force > 0) {
                 p.force -= drainRate;
                 if (p.force < 0) p.force = 0;
             }
             let currentSpeed = (p.force / 100) * MAX_SPEED;
             p.position += currentSpeed * deltaTime;
-            p.horseEl.style.transform = `translateX(${p.position}px) scaleX(-1)`;
-            p.forceBarEl.style.height = `${p.force}%`;
+            p.horseElement.style.transform = `translateX(${p.position}px) scaleX(-1)`;
+            p.forceBarElement.style.height = `${p.force}%`;
         });
 
         checkWinCondition();
@@ -168,10 +264,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function checkWinCondition() {
-        const finishLine = player1Lane.querySelector('.finish-line');
-        const finishLineOffset = 10; 
-        const trackWidth = player1Lane.clientWidth - player1Horse.clientWidth - finishLine.offsetWidth - finishLineOffset;
-        const winner = players.find(p => p.position >= trackWidth);
+        if (activePlayers.length === 0) return;
+        const firstLane = activePlayers[0].laneElement.querySelector('.lane');
+        const firstHorse = activePlayers[0].horseElement;
+        const finishLine = firstLane.querySelector('.finish-line');
+        const finishLineOffset = 10;
+        const trackWidth = firstLane.clientWidth - firstHorse.clientWidth - finishLine.offsetWidth - finishLineOffset;
+        
+        const winner = activePlayers.find(p => p.position >= trackWidth);
         if (winner) endGame(winner);
     }
 
@@ -179,87 +279,98 @@ document.addEventListener('DOMContentLoaded', () => {
         gameActive = false;
         logMessage(`📣🏆 The race is over! The winner is: ${winner.name}!`);
         winnerAnnEl.textContent = `${winner.name} Wins!`;
-        winnerAnnEl.className = `${winner.id}-win`;
+        winnerAnnEl.style.color = winner.color;
         
-        if (winner.id === 'p1') p1Score++;
-        else p2Score++;
-        
+        winner.score++;
         updateScoreDisplay();
-        // UPDATED: After a game ends, reset the countdown text for the next round.
-        countdownDisplay.textContent = 'Press New game to start';
+        updateGameReadyState();
     }
     
+    // --- Event Handlers ---
     function handleKeyDown(e) {
+        if (e.key === 'h' || e.key === 'H') {
+            e.preventDefault();
+            toggleHelpModal();
+            return;
+        }
         if (e.key === 'Escape') {
-            closeCustomizeModal();
+            closeAllModals();
             return;
         }
         if (!gameActive) return;
 
-        const config = controlConfigs[currentControlScheme];
         const key = e.key.toLowerCase();
+        const player = activePlayers.find(p => p.key === key);
 
-        if (key === config.player1) {
+        if (player && !player.isKeyDown) {
             e.preventDefault();
-            if (p1.isKeyDown) return;
-            p1.isKeyDown = true;
-            p1.force += incrementPerTap;
-            if (p1.force > 100) p1.force = 100;
-        } else if (key === config.player2 || (config.player2 === 'numpadenter' && key === 'enter')) {
-            e.preventDefault();
-            if (p2.isKeyDown) return;
-            p2.isKeyDown = true;
-            p2.force += incrementPerTap;
-            if (p2.force > 100) p2.force = 100;
+            player.isKeyDown = true;
+            player.force += incrementPerTap;
+            if (player.force > 100) player.force = 100;
         }
     }
 
     function handleKeyUp(e) {
-        if (!p1 || !p2) return;
-        const config = controlConfigs[currentControlScheme];
+        if (activePlayers.length === 0) return;
         const key = e.key.toLowerCase();
-
-        if (key === config.player1) {
-            p1.isKeyDown = false;
-        } else if (key === config.player2 || (config.player2 === 'numpadenter' && key === 'enter')) {
-            p2.isKeyDown = false;
-        }
-    }
-
-    function handleModalInteraction(e) {
-        const vehicleBtn = e.target.closest('.vehicle-btn');
-        const controlRadio = e.target.closest('input[name="controls"]');
-
-        if (vehicleBtn) {
-            const vehicle = vehicleBtn.dataset.vehicle;
-            const selectorId = vehicleBtn.parentElement.id;
-            if (selectorId === 'p1-vehicle-selector') {
-                p1Sprite = vehicle;
-                p1CurrentVehicle.textContent = vehicle;
-                if (p1) p1.horseEl.innerHTML = vehicle;
-            } else if (selectorId === 'p2-vehicle-selector') {
-                p2Sprite = vehicle;
-                p2CurrentVehicle.textContent = vehicle;
-                if (p2) p2.horseEl.innerHTML = vehicle;
-            }
-        }
-        
-        if (controlRadio) {
-            currentControlScheme = controlRadio.value;
-            updatePlayerTitles();
+        const player = activePlayers.find(p => p.key === key);
+        if (player) {
+            player.isKeyDown = false;
         }
     }
     
-    function openCustomizeModal() {
-        modalOverlay.classList.remove('hidden');
-        customizeModal.classList.remove('hidden');
+    function handleCustomizeInteraction(e) {
+        const vehicleBtn = e.target.closest('.vehicle-btn');
+        if (vehicleBtn) {
+            const vehicle = vehicleBtn.dataset.vehicle;
+            const section = e.target.closest('.customize-player-section');
+            const playerId = section.dataset.playerId;
+            const player = activePlayers.find(p => p.id === playerId);
+            if(player) {
+                player.sprite = vehicle;
+                player.currentVehicleElement.textContent = vehicle;
+                player.horseElement.innerHTML = vehicle;
+            }
+        }
     }
 
-    function closeCustomizeModal() {
+    // --- Modals and UI ---
+    function openModal(modal) {
+        modalOverlay.classList.remove('hidden');
+        modal.classList.remove('hidden');
+    }
+    
+    function closeAllModals() {
         modalOverlay.classList.add('hidden');
         customizeModal.classList.add('hidden');
+        helpModal.classList.add('hidden');
     }
 
+    function openCustomizeModal() {
+        openModal(customizeModal);
+    }
+
+    function toggleHelpModal() {
+        if (helpModal.classList.contains('hidden')) {
+            helpControlsList.innerHTML = '';
+            if (activePlayers.length > 0) {
+                activePlayers.forEach(p => {
+                    const item = document.createElement('div');
+                    item.className = 'help-control-item';
+                    item.innerHTML = `<p>${p.name}: <span class="key">${p.keyDisplay}</span></p>`;
+                    item.style.borderColor = p.color;
+                    helpControlsList.appendChild(item);
+                });
+            } else {
+                helpControlsList.innerHTML = '<p>No players have been added yet.</p>';
+            }
+            openModal(helpModal);
+        } else {
+            closeAllModals();
+        }
+    }
+
+    // --- Utility Functions ---
     function logMessage(message) {
         const li = document.createElement('li');
         li.textContent = message;
@@ -267,20 +378,29 @@ document.addEventListener('DOMContentLoaded', () => {
         logContainer.scrollTop = logContainer.scrollHeight;
     }
     function updateScoreDisplay() {
-        p1ScoreDisplay.textContent = `Score: ${p1Score}`;
-        p2ScoreDisplay.textContent = `Score: ${p2Score}`;
+        activePlayers.forEach(p => {
+            p.scoreElement.textContent = `Score: ${p.score}`;
+        });
     }
     
     // --- Event Listeners ---
     document.addEventListener('keydown', handleKeyDown);
     document.addEventListener('keyup', handleKeyUp);
     newGameButton.addEventListener('click', initGame);
+    addPlayerButton.addEventListener('click', addPlayer);
+
     customizeToggleButton.addEventListener('click', openCustomizeModal);
-    closeModalButton.addEventListener('click', closeCustomizeModal);
-    modalOverlay.addEventListener('click', closeCustomizeModal);
-    customizeModal.addEventListener('click', handleModalInteraction);
+    closeCustomizeModalButton.addEventListener('click', closeAllModals);
+    customizeModal.addEventListener('click', handleCustomizeInteraction);
+
+    closeHelpButton.addEventListener('click', closeAllModals);
+    modalOverlay.addEventListener('click', closeAllModals);
     
-    difficultyRadios.forEach(radio => radio.addEventListener('change', handleDifficultyChange));
+    difficultyRadios.forEach(radio => radio.addEventListener('change', (e) => {
+        currentDifficulty = e.target.value;
+        manualControlsArea.classList.toggle('hidden', currentDifficulty !== 'manual');
+        updateGameParameters();
+    }));
     incrementSlider.addEventListener('input', () => {
         incrementValueDisplay.textContent = incrementSlider.value;
         if (currentDifficulty === 'manual') updateGameParameters();
@@ -290,14 +410,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (currentDifficulty === 'manual') updateGameParameters();
     });
 
-    // REMOVED: The automatic game start listener has been removed.
-    // window.addEventListener('focus', ...);
-
     // --- Initializations ---
-    updatePlayerTitles();
     updateGameParameters();
-    // UPDATED: prepareGameBoard now handles the initial player setup.
-    prepareGameBoard();
-    // UPDATED: The welcome message is changed to reflect the new starting procedure.
-    logMessage("Welcome! Click 'New Game' to begin the race.");
+    populatePlayerDropdown();
+    updateGridLayout();
+    updateGameReadyState();
+    logMessage("Welcome! Add players and click 'New Game' to begin.");
 });
