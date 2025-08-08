@@ -114,12 +114,12 @@ h4 {
     z-index: 1000;
 }
 
-#customize-modal, #help-modal {
+#customize-modal {
     position: fixed;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    background-color: var(--container-bg);
+    background-color: #222223; /* Darker grey background */
     padding: 2rem;
     border: 1px solid var(--border-color);
     border-radius: 8px;
@@ -127,6 +127,21 @@ h4 {
     width: 90%;
     max-width: 600px;
 }
+
+#help-modal {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background-color: var(--container-bg); /* Original background */
+    padding: 2rem;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    z-index: 1001;
+    width: 90%;
+    max-width: 600px;
+}
+
 .modal-content {
     position: relative;
 }
