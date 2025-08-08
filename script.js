@@ -33,6 +33,50 @@ document.addEventListener('DOMContentLoaded', () => {
     const drainRateSlider = document.getElementById('drain-rate-slider');
     const drainRateValueDisplay = document.getElementById('drain-rate-value-display');
 
+    // --- Audio ---
+    // Create the AudioContext. It's best practice to create it once.
+    // Some browsers require a user interaction (like a click) to start the audio context.
+    // Our game structure (clicking "New Game") handles this naturally.
+    let audioContext;
+    try {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    } catch (e) {
+        console.warn("Web Audio API is not supported in this browser.");
+    }
+
+    /**
+     * Plays a synthesized sound using the Web Audio API.
+     * @param {object} options - The sound options.
+     * @param {number} [options.frequency=440] - The pitch of the sound in Hz.
+     * @param {number} [options.duration=0.1] - The duration of the sound in seconds.
+     * @param {number} [options.volume=0.3] - The volume (0 to 1).
+     * @param {string} [options.type='sine'] - The oscillator type ('sine', 'square', 'sawtooth', 'triangle').
+     */
+    function playSound({ frequency = 440, duration = 0.1, volume = 0.3, type = 'sine' }) {
+        if (!audioContext) return; // Don't play sound if the context couldn't be created.
+
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+
+        // Connect the nodes: oscillator -> gain -> speakers
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+
+        // Set sound properties
+        oscillator.type = type;
+        oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
+
+        // Set volume envelope to prevent harsh clicks
+        gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+        gainNode.gain.linearRampToValueAtTime(volume, audioContext.currentTime + 0.01); // Quick fade-in
+        gainNode.gain.setValueAtTime(volume, audioContext.currentTime + duration - 0.02); // Hold volume
+        gainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime + duration); // Quick fade-out
+
+        // Start and stop the sound
+        oscillator.start(audioContext.currentTime);
+        oscillator.stop(audioContext.currentTime + duration);
+    }
+
     // --- Game Settings & Configs ---
     const MAX_SPEED = 200;
     const difficultySettings = {
@@ -158,12 +202,10 @@ document.addEventListener('DOMContentLoaded', () => {
             keyDisplayElement: customizeSection.querySelector('.current-key-display')
         };
         activePlayers.push(playerObject);
-
-        // --- NEW: Add click/tap listeners to the control group ---
+        
         const pressAction = (e) => {
             e.preventDefault();
             if (!gameActive || playerObject.isKeyDown) return;
-
             playerObject.isKeyDown = true;
             playerObject.force += incrementPerTap;
             if (playerObject.force > 100) playerObject.force = 100;
@@ -178,7 +220,6 @@ document.addEventListener('DOMContentLoaded', () => {
         playerObject.controlsElement.addEventListener('mouseup', releaseAction);
         playerObject.controlsElement.addEventListener('mouseleave', releaseAction);
         playerObject.controlsElement.addEventListener('touchend', releaseAction);
-        // --- End of new listeners ---
 
         laneContainer.querySelector('.remove-player-btn').addEventListener('click', () => removePlayer(playerData.id));
     }
@@ -238,6 +279,10 @@ document.addEventListener('DOMContentLoaded', () => {
             logMessage("⚠️ Add at least one player to start a game.");
             return;
         }
+        // Resume AudioContext if it was suspended
+        if (audioContext && audioContext.state === 'suspended') {
+            audioContext.resume();
+        }
         if (countdownInterval) clearInterval(countdownInterval);
         prepareGameBoard();
         startCountdown(3, 'Game starting in:');
@@ -246,15 +291,21 @@ document.addEventListener('DOMContentLoaded', () => {
     function startCountdown(duration, textPrefix) {
         newGameButton.disabled = true;
         let count = duration;
+        
         countdownDisplay.textContent = `${textPrefix} ${count}`;
+        playSound({ frequency: 330, duration: 0.15, type: 'sine' }); // Play "3" sound
 
         countdownInterval = setInterval(() => {
             count--;
             if (count > 0) {
                 countdownDisplay.textContent = `${textPrefix} ${count}`;
+                playSound({ frequency: 330, duration: 0.15, type: 'sine' }); // Play "2" and "1" sound
             } else {
                 clearInterval(countdownInterval);
                 countdownDisplay.textContent = 'GO!';
+                // Play a higher, more distinct "GO" sound
+                playSound({ frequency: 523, duration: 0.3, type: 'square' }); 
+                
                 setTimeout(() => {
                     countdownDisplay.textContent = '';
                 }, 800);
@@ -317,7 +368,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // --- Event Handlers ---
     function handleKeyDown(e) {
-        if (playerToChangeKey) return; // Don't trigger game actions while changing keys
+        if (playerToChangeKey) return;
         if (e.key === 'h' || e.key === 'H') {
             e.preventDefault();
             toggleHelpModal();
