@@ -6,7 +6,6 @@
     --border-color: #3c3c3c;
     --title-color: #569cd6;
     --accent-color: #ce9178;
-    /* Removed player-specific colors to be set by JS */
 }
 
 body {
@@ -31,7 +30,7 @@ body {
     border-radius: 8px;
     padding: 1.5rem 2rem;
     width: 90%;
-    max-width: 1100px; /* Increased max-width for 4 players */
+    max-width: 1100px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
 }
 
@@ -162,10 +161,10 @@ h4 {
     border-bottom: none;
     margin-bottom: 0;
 }
-
 .customize-player-section h4 {
     border: none;
     font-size: 1.2em;
+    margin-bottom: 0.75rem;
 }
 .customize-player-section h4 span {
     font-size: 1.5em;
@@ -197,6 +196,43 @@ h4 {
     display: inline-block;
 }
 
+.key-config-area {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+    margin-top: 10px;
+}
+.current-key-display {
+    font-weight: bold;
+    color: var(--title-color);
+    background-color: var(--track-bg);
+    padding: 4px 10px;
+    border-radius: 5px;
+    border: 1px solid var(--border-color);
+    font-family: 'Consolas', 'Courier New', monospace;
+    min-width: 100px;
+    text-align: center;
+}
+.change-key-btn {
+    padding: 0.4rem 0.8rem;
+    font-size: 0.9rem;
+    background-color: #3a3d41;
+    border: 1px solid #4a4a4a;
+    color: var(--text-color);
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+.change-key-btn:hover {
+    background-color: #4f5257;
+}
+.change-key-btn.is-listening {
+    background-color: var(--accent-color);
+    color: var(--bg-color);
+    border-color: #a56d54;
+}
+
 .difficulty-settings, .manual-controls-area {
     margin-bottom: 1rem; padding: 1rem; border: 1px solid var(--border-color);
     border-radius: 8px; background-color: var(--bg-color);
@@ -224,18 +260,12 @@ input[type=range]::-moz-range-track { width: 100%; height: 5px; cursor: pointer;
 
 #winner-announcement { font-size: 2.5em; font-weight: bold; text-align: center; padding: 1rem; margin-bottom: 1rem; min-height: 2.5em; }
 
-/* --- CHANGE START --- */
-/* The layout rules for #race-track and #controls have been separated. */
-
-/* Controls layout: Remains a side-by-side grid */
 #controls {
     display: grid;
     gap: 1.5rem;
     margin-bottom: 1.5rem;
-    /* grid-template-columns is set dynamically via JS */
 }
 
-/* Racetrack layout: Changed to a vertical stack */
 #race-track {
     background-color: #1a1a1a;
     padding: 1rem;
@@ -244,16 +274,11 @@ input[type=range]::-moz-range-track { width: 100%; height: 5px; cursor: pointer;
     border: 1px solid #333;
     position: relative;
     overflow: hidden;
-
-    /* New rules to stack lanes vertically with a gap */
     display: flex;
     flex-direction: column;
     gap: 1rem;
 }
-/* --- CHANGE END --- */
 
-
-/* NEW: Lane container and label */
 .lane-container {
     position: relative;
 }
@@ -316,7 +341,14 @@ input[type=range]::-moz-range-track { width: 100%; height: 5px; cursor: pointer;
     font-style: italic;
     z-index: 500;
     border: 1px solid var(--border-color);
+    cursor: pointer;
+    transition: background-color 0.2s;
 }
+#help-prompt:hover {
+    background-color: rgba(37, 37, 38, 0.8);
+    color: white;
+}
+
 #help-modal .modal-content h2, #help-modal .modal-content h3 {
     text-align: left;
     border-bottom: 1px solid var(--border-color);

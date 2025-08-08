@@ -23,6 +23,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const helpModal = document.getElementById('help-modal');
     const closeHelpButton = document.getElementById('close-help-button');
     const helpControlsList = document.getElementById('help-controls-list');
+    const helpPrompt = document.getElementById('help-prompt');
 
     // Difficulty
     const difficultyRadios = document.querySelectorAll('input[name="difficulty"]');
@@ -42,8 +43,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const availablePlayers = [
         { id: 'p1', name: 'Player 1', key: 'w', keyDisplay: 'W', color: '#ff8a65' },
         { id: 'p2', name: 'Player 2', key: 'arrowup', keyDisplay: 'Up Arrow', color: '#64b5f6' },
-        { id: 'p3', name: 'Player 3', key: 'l', keyDisplay: 'L', color: '#81c784' },
-        { id: 'p4', name: 'Player 4', key: 'p', keyDisplay: 'P', color: '#ffd54f' }
+        { id: 'p3', name: 'Player 3', key: 'g', keyDisplay: 'G', color: '#81c784' },
+        { id: 'p4', name: 'Player 4', key: 'l', keyDisplay: 'L', color: '#ffd54f' }
     ];
     const vehicleOptions = ['🏇', '🏎', '🎠', '🏃‍♂️', '🚴‍♀️'];
 
@@ -54,8 +55,18 @@ document.addEventListener('DOMContentLoaded', () => {
     let lastTime = 0;
     let currentDifficulty = 'hard';
     let countdownInterval;
+    let playerBeingRebound = null;
 
-    // --- Player Management ---
+    // --- Player Management & UI Generation ---
+    function formatKeyDisplay(key) {
+        if (key === 'arrowup') return 'Up Arrow';
+        if (key === 'arrowdown') return 'Down Arrow';
+        if (key === 'arrowleft') return 'Left Arrow';
+        if (key === 'arrowright') return 'Right Arrow';
+        if (key === ' ') return 'Space';
+        return key.length === 1 ? key.toUpperCase() : key;
+    }
+
     function populatePlayerDropdown() {
         playerSelect.innerHTML = '';
         const unselectedPlayers = availablePlayers.filter(ap => !activePlayers.some(p => p.id === ap.id));
@@ -72,7 +83,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (playerSelect.value) {
             const playerData = availablePlayers.find(p => p.id === playerSelect.value);
             if (!playerData) return;
-
             createPlayer(playerData);
             populatePlayerDropdown();
             updateGridLayout();
@@ -81,6 +91,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function removePlayer(playerId) {
+        if (playerBeingRebound && playerBeingRebound.id === playerId) {
+            playerBeingRebound = null;
+        }
         const playerIndex = activePlayers.findIndex(p => p.id === playerId);
         if (playerIndex > -1) {
             const player = activePlayers[playerIndex];
@@ -88,10 +101,10 @@ document.addEventListener('DOMContentLoaded', () => {
             player.controlsElement.remove();
             player.customizeElement.remove();
             activePlayers.splice(playerIndex, 1);
-            
             populatePlayerDropdown();
             updateGridLayout();
             updateGameReadyState();
+            updateAllPlayerKeyDisplays();
         }
     }
 
@@ -114,7 +127,7 @@ document.addEventListener('DOMContentLoaded', () => {
         controlGroup.className = 'control-group';
         controlGroup.innerHTML = `
             <p class="score" id="${playerData.id}-score">Score: 0</p>
-            <h3 style="color: ${playerData.color};">${playerData.name} (${playerData.keyDisplay})</h3>
+            <h3 style="color: ${playerData.color};" data-player-id="${playerData.id}">${playerData.name} (${playerData.keyDisplay})</h3>
             <div class="force-container">
                 <div id="${playerData.id}-force-bar" class="force-bar" style="background-color: ${playerData.color};"></div>
             </div>
@@ -129,6 +142,11 @@ document.addEventListener('DOMContentLoaded', () => {
             <h4 style="color: ${playerData.color};">${playerData.name} Vehicle: <span class="current-vehicle">🏇</span></h4>
             <div class="vehicle-selector">
                 ${vehicleOptions.map(v => `<button class="vehicle-btn" data-vehicle="${v}">${v}</button>`).join('')}
+            </div>
+            <div class="key-config-area">
+                Control Key: 
+                <span class="current-key-display">${playerData.keyDisplay}</span>
+                <button class="change-key-btn" data-player-id="${playerData.id}">Change</button>
             </div>
         `;
         customizePlayerList.appendChild(customizeSection);
@@ -147,24 +165,33 @@ document.addEventListener('DOMContentLoaded', () => {
             scoreElement: controlGroup.querySelector('.score'),
             controlsElement: controlGroup,
             customizeElement: customizeSection,
-            currentVehicleElement: customizeSection.querySelector('.current-vehicle')
+            currentVehicleElement: customizeSection.querySelector('.current-vehicle'),
+            keyDisplayElement: customizeSection.querySelector('.current-key-display'),
+            changeKeyButton: customizeSection.querySelector('.change-key-btn'),
+            titleElement: controlGroup.querySelector('h3')
         };
         activePlayers.push(playerObject);
         laneContainer.querySelector('.remove-player-btn').addEventListener('click', () => removePlayer(playerData.id));
     }
     
-    // --- CHANGE START ---
+    function updateAllPlayerKeyDisplays() {
+        activePlayers.forEach(p => {
+            p.keyDisplayElement.textContent = p.keyDisplay;
+            p.titleElement.textContent = `${p.name} (${p.keyDisplay})`;
+            p.changeKeyButton.textContent = 'Change';
+            p.changeKeyButton.classList.remove('is-listening');
+        });
+        if (playerBeingRebound) {
+            playerBeingRebound.changeKeyButton.textContent = 'Press a key...';
+            playerBeingRebound.changeKeyButton.classList.add('is-listening');
+        }
+    }
+
     function updateGridLayout() {
         const numPlayers = activePlayers.length > 0 ? activePlayers.length : 1;
         const gridTemplate = `repeat(${numPlayers}, 1fr)`;
-        
-        // This line was removed, as the racetrack is now stacked vertically via CSS
-        // raceTrack.style.gridTemplateColumns = gridTemplate; 
-
-        // The controls container still uses the dynamic grid
         controlsContainer.style.gridTemplateColumns = gridTemplate;
     }
-    // --- CHANGE END ---
 
     function updateGameReadyState() {
         const canStart = activePlayers.length > 0;
@@ -294,20 +321,40 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // --- Event Handlers ---
     function handleKeyDown(e) {
-        if (e.key === 'h' || e.key === 'H') {
+        const key = e.key.toLowerCase();
+        
+        if (playerBeingRebound) {
+            e.preventDefault();
+            const isKeyInUse = activePlayers.some(p => p.key === key && p.id !== playerBeingRebound.id);
+            if (isKeyInUse) {
+                logMessage(`⚠️ Key "${formatKeyDisplay(key)}" is already in use!`);
+                return;
+            }
+            if (['escape', 'h'].includes(key)) {
+                logMessage(`⚠️ Key "${formatKeyDisplay(key)}" is reserved!`);
+                return;
+            }
+
+            playerBeingRebound.key = key;
+            playerBeingRebound.keyDisplay = formatKeyDisplay(key);
+            playerBeingRebound = null;
+            updateAllPlayerKeyDisplays();
+            logMessage(`✅ Key assigned successfully!`);
+            return;
+        }
+
+        if (key === 'h') {
             e.preventDefault();
             toggleHelpModal();
             return;
         }
-        if (e.key === 'Escape') {
+        if (key === 'escape') {
             closeAllModals();
             return;
         }
         if (!gameActive) return;
 
-        const key = e.key.toLowerCase();
         const player = activePlayers.find(p => p.key === key);
-
         if (player && !player.isKeyDown) {
             e.preventDefault();
             player.isKeyDown = true;
@@ -327,6 +374,8 @@ document.addEventListener('DOMContentLoaded', () => {
     
     function handleCustomizeInteraction(e) {
         const vehicleBtn = e.target.closest('.vehicle-btn');
+        const changeKeyBtn = e.target.closest('.change-key-btn');
+
         if (vehicleBtn) {
             const vehicle = vehicleBtn.dataset.vehicle;
             const section = e.target.closest('.customize-player-section');
@@ -337,6 +386,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 player.currentVehicleElement.textContent = vehicle;
                 player.horseElement.innerHTML = vehicle;
             }
+        }
+        
+        if (changeKeyBtn) {
+            const playerId = changeKeyBtn.dataset.playerId;
+            playerBeingRebound = activePlayers.find(p => p.id === playerId) || null;
+            updateAllPlayerKeyDisplays();
         }
     }
 
@@ -350,6 +405,10 @@ document.addEventListener('DOMContentLoaded', () => {
         modalOverlay.classList.add('hidden');
         customizeModal.classList.add('hidden');
         helpModal.classList.add('hidden');
+        if (playerBeingRebound) {
+            playerBeingRebound = null;
+            updateAllPlayerKeyDisplays();
+        }
     }
 
     function openCustomizeModal() {
@@ -394,6 +453,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.addEventListener('keyup', handleKeyUp);
     newGameButton.addEventListener('click', initGame);
     addPlayerButton.addEventListener('click', addPlayer);
+    helpPrompt.addEventListener('click', toggleHelpModal);
 
     customizeToggleButton.addEventListener('click', openCustomizeModal);
     closeCustomizeModalButton.addEventListener('click', closeAllModals);
