@@ -4,7 +4,7 @@
 
 ## Play it now: https://pemmyz.github.io/js_horseclick/
 
-**Hevoskisat Clicker Challenge** is a fast-paced, competitive 2-player tapping game made in pure HTML5, CSS3, and JavaScript. Tap your keys to charge force and race your chosen character to the finish line. First to cross wins!
+**Hevoskisat Clicker Challenge** is a fast-paced, competitive multiplayer tapping game made in pure HTML5, CSS3, and JavaScript. Tap your keys to charge force and race your chosen character to the finish line. First to cross wins!
 
 ![screenshot](screenshots/game_1.png)
 
