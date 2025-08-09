@@ -7,103 +7,36 @@ document.addEventListener('DOMContentLoaded', () => {
     const logList = document.getElementById('log-list');
     const logContainer = document.getElementById('log-container');
     const countdownDisplay = document.getElementById('countdown-display');
-
-    // Player Management
     const playerSelect = document.getElementById('player-select');
     const addPlayerButton = document.getElementById('add-player-button');
-    
-    // Modals & Customization
     const customizeToggleButton = document.getElementById('customize-toggle-button');
     const modalOverlay = document.getElementById('modal-overlay');
     const customizeModal = document.getElementById('customize-modal');
     const closeCustomizeModalButton = document.getElementById('close-modal-button');
     const customizePlayerList = document.getElementById('customize-player-list');
-    
-    // Help Screen
     const helpModal = document.getElementById('help-modal');
     const closeHelpButton = document.getElementById('close-help-button');
     const helpControlsList = document.getElementById('help-controls-list');
     const helpPrompt = document.getElementById('help-prompt');
-
-    // Difficulty
     const difficultyRadios = document.querySelectorAll('input[name="difficulty"]');
     const manualControlsArea = document.getElementById('manual-controls');
     const incrementSlider = document.getElementById('increment-slider');
     const incrementValueDisplay = document.getElementById('increment-value-display');
     const drainRateSlider = document.getElementById('drain-rate-slider');
     const drainRateValueDisplay = document.getElementById('drain-rate-value-display');
-
-    // --- NEW: Audio Setup and Controls ---
-    let audioContext;
-    let masterGainNode;
-    let masterVolume = 0.5; // Start at 50% volume
-    let isMuted = false;
-
     const volumeSlider = document.getElementById('volume-slider');
     const muteButton = document.getElementById('mute-button');
+    // NEW: Start Mechanic DOM elements
+    const startModeSelect = document.getElementById('start-mode-select');
+    const boostSlider = document.getElementById('boost-slider');
+    const boostValueDisplay = document.getElementById('boost-value-display');
+    const boostSliderGroup = document.getElementById('boost-slider-group');
 
-    function initAudio() {
-        try {
-            if (!audioContext) {
-                audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                masterGainNode = audioContext.createGain();
-                masterGainNode.connect(audioContext.destination);
-                masterGainNode.gain.setValueAtTime(masterVolume, audioContext.currentTime);
-            }
-        } catch (e) {
-            console.warn("Web Audio API is not supported in this browser.");
-            // Disable audio UI if not supported
-            document.getElementById('audio-controls').style.display = 'none';
-        }
-    }
-
-    function playSound({ frequency = 440, duration = 0.1, volume = 0.15, type = 'sine' }) {
-        if (!audioContext || !masterGainNode) return;
-
-        const oscillator = audioContext.createOscillator();
-        const gainNode = audioContext.createGain();
-
-        // Connect nodes through the master gain
-        oscillator.connect(gainNode);
-        gainNode.connect(masterGainNode);
-
-        oscillator.type = type;
-        oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
-        
-        gainNode.gain.setValueAtTime(0, audioContext.currentTime);
-        gainNode.gain.linearRampToValueAtTime(volume, audioContext.currentTime + 0.01);
-        gainNode.gain.setValueAtTime(volume, audioContext.currentTime + duration - 0.02);
-        gainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime + duration);
-
-        oscillator.start(audioContext.currentTime);
-        oscillator.stop(audioContext.currentTime + duration);
-    }
-
-    function updateMuteButtonUI() {
-        muteButton.textContent = isMuted ? '🔇' : '🔊';
-    }
-
-    volumeSlider.addEventListener('input', (e) => {
-        masterVolume = parseFloat(e.target.value);
-        if (masterGainNode) {
-            masterGainNode.gain.setValueAtTime(masterVolume, audioContext.currentTime);
-        }
-        isMuted = false;
-        updateMuteButtonUI();
-    });
-
-    muteButton.addEventListener('click', () => {
-        isMuted = !isMuted;
-        if (masterGainNode) {
-            if (isMuted) {
-                masterGainNode.gain.setValueAtTime(0, audioContext.currentTime);
-            } else {
-                masterGainNode.gain.setValueAtTime(masterVolume, audioContext.currentTime);
-            }
-        }
-        updateMuteButtonUI();
-    });
-    // --- End of Audio Setup ---
+    // --- Audio Setup ---
+    let audioContext;
+    let masterGainNode;
+    let masterVolume = 0.5;
+    let isMuted = false;
 
     // --- Game Settings & Configs ---
     const MAX_SPEED = 200;
@@ -112,14 +45,18 @@ document.addEventListener('DOMContentLoaded', () => {
         medium: { increment: 12, drainRate: 0.4, drainSlider: 4 },
         hard:   { increment: 8,  drainRate: 0.7, drainSlider: 7 }
     };
+    // NEW: Added second keys for two-button mode
     const availablePlayers = [
-        { id: 'p1', name: 'Player 1', key: 'w', keyDisplay: 'W', color: '#ff8a65' },
-        { id: 'p2', name: 'Player 2', key: 'arrowup', keyDisplay: 'Up Arrow', color: '#64b5f6' },
-        { id: 'p3', name: 'Player 3', key: 'l', keyDisplay: 'L', color: '#81c784' },
-        { id: 'p4', name: 'Player 4', key: 'p', keyDisplay: 'P', color: '#ffd54f' }
+        { id: 'p1', name: 'Player 1', key: 'w', keyDisplay: 'W', key2: 'e', key2Display: 'E', color: '#ff8a65' },
+        { id: 'p2', name: 'Player 2', key: 'arrowup', keyDisplay: 'Up Arrow', key2: 'arrowdown', key2Display: 'Down Arrow', color: '#64b5f6' },
+        { id: 'p3', name: 'Player 3', key: 'l', keyDisplay: 'L', key2: 'k', key2Display: 'K', color: '#81c784' },
+        { id: 'p4', name: 'Player 4', key: 'p', keyDisplay: 'P', key2: 'o', key2Display: 'O', color: '#ffd54f' }
     ];
     const vehicleOptions = ['🏇', '🏎', '🎠', '🏃‍♂️', '🚴‍♀️'];
-
+    // NEW: Start Mechanic settings
+    const PERFECT_START_WINDOW_MS = 250;
+    const FALSE_START_STALL_MS = 1500;
+    
     // --- Game State ---
     let drainRate, incrementPerTap;
     let activePlayers = [];
@@ -128,6 +65,51 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentDifficulty = 'hard';
     let countdownInterval;
     let playerToChangeKey = null;
+    let keyToChangeIndex = 1; // 1 for primary, 2 for secondary
+    // NEW: Start Mechanic State
+    let startMode = 'single'; // 'single', 'two', or 'disabled'
+    let startBoostMultiplier = 1.0;
+    let preGameListenersActive = false;
+
+
+    // --- Audio Functions ---
+    function initAudio() {
+        try {
+            if (!audioContext) {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                masterGainNode = audioContext.createGain();
+                masterGainNode.connect(audioContext.destination);
+                masterGainNode.gain.setValueAtTime(masterVolume, audioContext.currentTime);
+            }
+        } catch (e) { console.warn("Web Audio API is not supported."); document.getElementById('audio-controls').style.display = 'none'; }
+    }
+    function playSound({ frequency = 440, duration = 0.1, volume = 0.15, type = 'sine' }) {
+        if (!audioContext || !masterGainNode) return;
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+        oscillator.connect(gainNode);
+        gainNode.connect(masterGainNode);
+        oscillator.type = type;
+        oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
+        gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+        gainNode.gain.linearRampToValueAtTime(volume, audioContext.currentTime + 0.01);
+        gainNode.gain.setValueAtTime(volume, audioContext.currentTime + duration - 0.02);
+        gainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime + duration);
+        oscillator.start(audioContext.currentTime);
+        oscillator.stop(audioContext.currentTime + duration);
+    }
+    function updateMuteButtonUI() { muteButton.textContent = isMuted ? '🔇' : '🔊'; }
+    volumeSlider.addEventListener('input', (e) => {
+        masterVolume = parseFloat(e.target.value);
+        if (masterGainNode) masterGainNode.gain.setValueAtTime(masterVolume, audioContext.currentTime);
+        isMuted = false;
+        updateMuteButtonUI();
+    });
+    muteButton.addEventListener('click', () => {
+        isMuted = !isMuted;
+        if (masterGainNode) masterGainNode.gain.setValueAtTime(isMuted ? 0 : masterVolume, audioContext.currentTime);
+        updateMuteButtonUI();
+    });
 
     // --- Player Management ---
     function populatePlayerDropdown() {
@@ -146,7 +128,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (playerSelect.value) {
             const playerData = availablePlayers.find(p => p.id === playerSelect.value);
             if (!playerData) return;
-
             createPlayer(playerData);
             populatePlayerDropdown();
             updateGridLayout();
@@ -162,7 +143,6 @@ document.addEventListener('DOMContentLoaded', () => {
             player.controlsElement.remove();
             player.customizeElement.remove();
             activePlayers.splice(playerIndex, 1);
-            
             populatePlayerDropdown();
             updateGridLayout();
             updateGameReadyState();
@@ -201,16 +181,23 @@ document.addEventListener('DOMContentLoaded', () => {
             <div class="vehicle-selector">
                 ${vehicleOptions.map(v => `<button class="vehicle-btn" data-vehicle="${v}">${v}</button>`).join('')}
             </div>
-            <div class="key-config-area">
-                <div class="current-key-display">${playerData.keyDisplay}</div>
-                <button class="change-key-btn" data-player-id="${playerData.id}">Change Key</button>
+            <div class="key-config-container">
+                <div class="key-config-area" data-key-index="1">
+                    <span class="key-label">Key 1:</span>
+                    <div class="current-key-display">${playerData.keyDisplay}</div>
+                    <button class="change-key-btn" data-player-id="${playerData.id}" data-key-index="1">Change Key</button>
+                </div>
+                <div class="key-config-area" data-key-index="2">
+                    <span class="key-label">Key 2:</span>
+                    <div class="current-key-display">${playerData.key2Display}</div>
+                    <button class="change-key-btn" data-player-id="${playerData.id}" data-key-index="2">Change Key</button>
+                </div>
             </div>
         `;
         customizePlayerList.appendChild(customizeSection);
 
         const playerObject = {
-            ...playerData,
-            sprite: '🏇', force: 0, position: 0, isKeyDown: false, score: 0,
+            ...playerData, sprite: '🏇', force: 0, position: 0, isKeyDown: false, score: 0,
             laneElement: laneContainer,
             horseElement: laneContainer.querySelector('.horse'),
             forceBarElement: controlGroup.querySelector('.force-bar'),
@@ -219,25 +206,30 @@ document.addEventListener('DOMContentLoaded', () => {
             controlsTitleElement: controlGroup.querySelector('h3'),
             customizeElement: customizeSection,
             currentVehicleElement: customizeSection.querySelector('.current-vehicle'),
-            keyDisplayElement: customizeSection.querySelector('.current-key-display')
+            keyDisplayElement1: customizeSection.querySelector('[data-key-index="1"] .current-key-display'),
+            keyDisplayElement2: customizeSection.querySelector('[data-key-index="2"] .current-key-display'),
+            // NEW: State for start mechanic
+            startState: 'waiting', // 'waiting', 'false_start', 'boosted'
+            isStalled: false,
+            goKey1Pressed: false,
+            goKey2Pressed: false,
         };
         activePlayers.push(playerObject);
+        updateKeyConfigVisibility(); // Hide/show second key based on current mode
         
         const pressAction = (e) => {
             e.preventDefault();
-            if (!gameActive || playerObject.isKeyDown) return;
+            if (!gameActive || playerObject.isKeyDown || playerObject.isStalled) return;
             playerObject.isKeyDown = true;
             playerObject.force += incrementPerTap;
             if (playerObject.force > 100) playerObject.force = 100;
         };
         const releaseAction = () => { playerObject.isKeyDown = false; };
-
         playerObject.controlsElement.addEventListener('mousedown', pressAction);
         playerObject.controlsElement.addEventListener('touchstart', pressAction, { passive: false });
         playerObject.controlsElement.addEventListener('mouseup', releaseAction);
         playerObject.controlsElement.addEventListener('mouseleave', releaseAction);
         playerObject.controlsElement.addEventListener('touchend', releaseAction);
-
         laneContainer.querySelector('.remove-player-btn').addEventListener('click', () => removePlayer(playerData.id));
     }
     
@@ -248,14 +240,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function updateGameReadyState() {
         const canStart = activePlayers.length > 0;
-        newGameButton.disabled = !canStart;
+        newGameButton.disabled = !canStart || preGameListenersActive;
         if (!canStart) {
             countdownDisplay.textContent = 'Add a player to begin!';
-        } else if (!gameActive) {
+        } else if (!gameActive && !preGameListenersActive) {
             countdownDisplay.textContent = 'Press New Game to start';
         }
     }
 
+    // --- Game Logic & Flow ---
     function updateGameParameters() {
         if (currentDifficulty === 'manual') {
             incrementPerTap = parseInt(incrementSlider.value);
@@ -269,6 +262,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         incrementValueDisplay.textContent = incrementSlider.value;
         drainRateValueDisplay.textContent = (parseFloat(drainRateSlider.value) / 10).toFixed(1);
+
+        startMode = startModeSelect.value;
+        startBoostMultiplier = parseFloat(boostSlider.value) / 10;
+        boostValueDisplay.textContent = startBoostMultiplier.toFixed(1);
+        boostSliderGroup.classList.toggle('hidden', startMode === 'disabled');
+        updateKeyConfigVisibility();
     }
     
     function prepareGameBoard() {
@@ -282,27 +281,35 @@ document.addEventListener('DOMContentLoaded', () => {
         activePlayers.forEach(p => {
             p.horseElement.innerHTML = p.sprite;
             p.horseElement.style.transform = `translateX(0px) scaleX(-1)`;
+            p.horseElement.style.opacity = '1';
+            p.horseElement.style.textShadow = 'none';
             p.forceBarElement.style.height = '0%';
             p.position = 0;
             p.force = 0;
+            // NEW: Reset start mechanic state
+            p.startState = 'waiting';
+            p.isStalled = false;
+            p.goKey1Pressed = false;
+            p.goKey2Pressed = false;
         });
     }
 
     function initGame() {
-        if (activePlayers.length === 0) {
-            logMessage("⚠️ Add at least one player to start a game.");
-            return;
-        }
-        if (audioContext && audioContext.state === 'suspended') {
-            audioContext.resume();
-        }
+        if (activePlayers.length === 0) return logMessage("⚠️ Add at least one player to start a game.");
+        if (audioContext && audioContext.state === 'suspended') audioContext.resume();
         if (countdownInterval) clearInterval(countdownInterval);
-        prepareGameBoard();
-        startCountdown(3, 'Game starting in:');
-    }
 
+        prepareGameBoard();
+        
+        if (startMode !== 'disabled') {
+            document.addEventListener('keydown', handlePreGameKeyDown);
+            preGameListenersActive = true;
+        }
+        updateGameReadyState();
+        startCountdown(3, 'Get Ready...');
+    }
+    
     function startCountdown(duration, textPrefix) {
-        newGameButton.disabled = true;
         let count = duration;
         countdownDisplay.textContent = `${textPrefix} ${count}`;
         playSound({ frequency: 330, duration: 0.15, type: 'sine' });
@@ -314,22 +321,58 @@ document.addEventListener('DOMContentLoaded', () => {
                 playSound({ frequency: 330, duration: 0.15, type: 'sine' });
             } else {
                 clearInterval(countdownInterval);
-                countdownDisplay.textContent = 'GO!';
-                playSound({ frequency: 523, duration: 0.3, type: 'square' }); 
+                document.removeEventListener('keydown', handlePreGameKeyDown); // Stop listening for false starts
                 
-                setTimeout(() => {
-                    countdownDisplay.textContent = '';
-                }, 800);
-                startGame();
+                countdownDisplay.textContent = 'GO!';
+                playSound({ frequency: 523, duration: 0.3, type: 'square' });
+                
+                if (startMode !== 'disabled') {
+                    document.addEventListener('keydown', handleGoKeyDown);
+                    // After the "perfect start" window, remove the listener and start the race.
+                    setTimeout(() => {
+                        document.removeEventListener('keydown', handleGoKeyDown);
+                        startGame();
+                    }, PERFECT_START_WINDOW_MS);
+                } else {
+                    startGame(); // No start mechanic, just go
+                }
             }
         }, 1000);
     }
 
     function startGame() {
-        logMessage(`📣🏁 The race has begun! ${activePlayers.length} player(s) are off!`);
+        preGameListenersActive = false;
+        // Final check for two-button mode success
+        if (startMode === 'two') {
+            activePlayers.forEach(p => {
+                if (p.startState === 'waiting' && p.goKey1Pressed && p.goKey2Pressed) {
+                    p.startState = 'boosted';
+                    logMessage(`🚀 ${p.name} gets a PERFECT START!`);
+                    playSound({ frequency: 660, duration: 0.2, type: 'triangle', volume: 0.2 });
+                    p.horseElement.style.textShadow = '0 0 10px #f0e68c';
+                }
+            });
+        }
+
+        // Apply boosts and penalties
+        activePlayers.forEach(p => {
+            if (p.startState === 'boosted') {
+                const boostPixels = p.horseElement.clientWidth * startBoostMultiplier;
+                p.position += boostPixels;
+            } else if (p.startState === 'false_start') {
+                p.isStalled = true;
+                setTimeout(() => {
+                    p.isStalled = false;
+                    p.horseElement.style.opacity = '1';
+                    logMessage(`🏃 ${p.name} can now move!`);
+                }, FALSE_START_STALL_MS);
+            }
+        });
+        
+        logMessage(`📣🏁 The race has begun!`);
         gameActive = true;
         lastTime = 0;
-        newGameButton.disabled = false;
+        updateGameReadyState();
         requestAnimationFrame(gameLoop);
     }
 
@@ -344,8 +387,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 p.force -= drainRate;
                 if (p.force < 0) p.force = 0;
             }
-            let currentSpeed = (p.force / 100) * MAX_SPEED;
-            p.position += currentSpeed * deltaTime;
+            if (!p.isStalled) {
+                let currentSpeed = (p.force / 100) * MAX_SPEED;
+                p.position += currentSpeed * deltaTime;
+            }
             p.horseElement.style.transform = `translateX(${p.position}px) scaleX(-1)`;
             p.forceBarElement.style.height = `${p.force}%`;
         });
@@ -356,19 +401,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function checkWinCondition() {
         if (activePlayers.length === 0) return;
-        const firstLane = activePlayers[0].laneElement.querySelector('.lane');
-        const firstHorse = activePlayers[0].horseElement;
-        const finishLine = firstLane.querySelector('.finish-line');
-        const finishLineOffset = 10;
-        const trackWidth = firstLane.clientWidth - firstHorse.clientWidth - finishLine.offsetWidth - finishLineOffset;
-        
+        const trackWidth = raceTrack.querySelector('.lane').clientWidth - 60; // Approx finish line area
         const winner = activePlayers.find(p => p.position >= trackWidth);
         if (winner) endGame(winner);
     }
 
     function endGame(winner) {
         gameActive = false;
-        logMessage(`📣🏆 The race is over! The winner is: ${winner.name}!`);
+        logMessage(`📣🏆 Winner: ${winner.name}!`);
         winnerAnnEl.textContent = `${winner.name} Wins!`;
         winnerAnnEl.style.color = winner.color;
         winner.score++;
@@ -376,52 +416,67 @@ document.addEventListener('DOMContentLoaded', () => {
         updateGameReadyState();
     }
     
+    // --- Input Handling ---
     function handleKeyDown(e) {
         if (playerToChangeKey) return;
-        if (e.key === 'h' || e.key === 'H') {
-            e.preventDefault();
-            toggleHelpModal();
-            return;
-        }
-        if (e.key === 'Escape') {
-            closeAllModals();
-            return;
-        }
+        if (e.key === 'h' || e.key === 'H') { e.preventDefault(); toggleHelpModal(); return; }
+        if (e.key === 'Escape') { closeAllModals(); return; }
         if (!gameActive) return;
 
         const key = e.key.toLowerCase();
         const player = activePlayers.find(p => p.key === key);
 
-        if (player && !player.isKeyDown) {
+        if (player && !player.isKeyDown && !player.isStalled) {
             e.preventDefault();
             player.isKeyDown = true;
             player.force += incrementPerTap;
             if (player.force > 100) player.force = 100;
         }
     }
-
     function handleKeyUp(e) {
-        if (activePlayers.length === 0) return;
         const key = e.key.toLowerCase();
         const player = activePlayers.find(p => p.key === key);
-        if (player) {
-            player.isKeyDown = false;
+        if (player) player.isKeyDown = false;
+    }
+
+    // NEW: Handlers for start mechanic
+    function handlePreGameKeyDown(e) {
+        const key = e.key.toLowerCase();
+        const player = activePlayers.find(p => p.key === key || p.key2 === key);
+        if (player && player.startState === 'waiting') {
+            player.startState = 'false_start';
+            logMessage(`💥 ${player.name} jumped the gun! (False Start)`);
+            playSound({ frequency: 220, duration: 0.3, type: 'sawtooth' });
+            player.horseElement.style.opacity = '0.4';
+        }
+    }
+    function handleGoKeyDown(e) {
+        const key = e.key.toLowerCase();
+        const player = activePlayers.find(p => p.key === key || p.key2 === key);
+        if (!player || player.startState !== 'waiting') return;
+
+        if (startMode === 'single' && key === player.key) {
+            player.startState = 'boosted';
+            logMessage(`🚀 ${player.name} gets a PERFECT START!`);
+            playSound({ frequency: 660, duration: 0.2, type: 'triangle', volume: 0.2 });
+            player.horseElement.style.textShadow = '0 0 10px #f0e68c';
+        } else if (startMode === 'two') {
+            if (key === player.key) player.goKey1Pressed = true;
+            if (key === player.key2) player.goKey2Pressed = true;
+            // The actual state change to 'boosted' happens in startGame for this mode
         }
     }
     
+    // --- UI & Modals ---
     function handleCustomizeInteraction(e) {
         const vehicleBtn = e.target.closest('.vehicle-btn');
         const keyBtn = e.target.closest('.change-key-btn');
-
         if (vehicleBtn) {
-            const vehicle = vehicleBtn.dataset.vehicle;
-            const section = e.target.closest('.customize-player-section');
-            const playerId = section.dataset.playerId;
-            const player = activePlayers.find(p => p.id === playerId);
+            const player = activePlayers.find(p => p.id === vehicleBtn.closest('.customize-player-section').dataset.playerId);
             if(player) {
-                player.sprite = vehicle;
-                player.currentVehicleElement.textContent = vehicle;
-                player.horseElement.innerHTML = vehicle;
+                player.sprite = vehicleBtn.dataset.vehicle;
+                player.currentVehicleElement.textContent = vehicleBtn.dataset.vehicle;
+                player.horseElement.innerHTML = vehicleBtn.dataset.vehicle;
             }
         } else if (keyBtn && !playerToChangeKey) {
             startKeyChange(keyBtn);
@@ -429,8 +484,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function startKeyChange(button) {
-        const playerId = button.dataset.playerId;
-        playerToChangeKey = activePlayers.find(p => p.id === playerId);
+        playerToChangeKey = activePlayers.find(p => p.id === button.dataset.playerId);
+        keyToChangeIndex = parseInt(button.dataset.keyIndex);
         button.textContent = 'Press any key...';
         button.classList.add('is-listening');
         document.addEventListener('keydown', handleKeySelection, { once: true });
@@ -446,32 +501,34 @@ document.addEventListener('DOMContentLoaded', () => {
         e.preventDefault();
         const newKey = e.key.toLowerCase();
         const newKeyDisplay = getKeyDisplay(e);
+        const isKeyInUse = activePlayers.some(p => (p.key === newKey || p.key2 === newKey) && p.id !== playerToChangeKey.id);
 
-        if (activePlayers.some(p => p.key === newKey && p.id !== playerToChangeKey.id)) {
+        if (isKeyInUse) {
             alert(`Key "${newKeyDisplay}" is already in use. Please choose another.`);
         } else {
-            playerToChangeKey.key = newKey;
-            playerToChangeKey.keyDisplay = newKeyDisplay;
-            playerToChangeKey.keyDisplayElement.textContent = newKeyDisplay;
-            playerToChangeKey.controlsTitleElement.textContent = `${playerToChangeKey.name} (${newKeyDisplay})`;
+            if (keyToChangeIndex === 1) {
+                playerToChangeKey.key = newKey;
+                playerToChangeKey.keyDisplay = newKeyDisplay;
+                playerToChangeKey.keyDisplayElement1.textContent = newKeyDisplay;
+            } else {
+                playerToChangeKey.key2 = newKey;
+                playerToChangeKey.key2Display = newKeyDisplay;
+                playerToChangeKey.keyDisplayElement2.textContent = newKeyDisplay;
+            }
+            playerToChangeKey.controlsTitleElement.textContent = `${playerToChangeKey.name} (${playerToChangeKey.keyDisplay})`;
         }
         
-        const button = playerToChangeKey.customizeElement.querySelector('.change-key-btn');
+        const button = playerToChangeKey.customizeElement.querySelector(`.change-key-btn[data-key-index="${keyToChangeIndex}"]`);
         button.textContent = 'Change Key';
         button.classList.remove('is-listening');
         playerToChangeKey = null;
     }
 
-    function openModal(modal) {
-        modalOverlay.classList.remove('hidden');
-        modal.classList.remove('hidden');
-    }
-    
+    function openModal(modal) { modalOverlay.classList.remove('hidden'); modal.classList.remove('hidden'); }
     function closeAllModals() {
-        if (playerToChangeKey) {
-            const button = playerToChangeKey.customizeElement.querySelector('.change-key-btn');
-            button.textContent = 'Change Key';
-            button.classList.remove('is-listening');
+        if (playerToChangeKey) { // Cancel an in-progress key change
+            const button = playerToChangeKey.customizeElement.querySelector('.is-listening');
+            if (button) { button.textContent = 'Change Key'; button.classList.remove('is-listening'); }
             playerToChangeKey = null;
             document.removeEventListener('keydown', handleKeySelection);
         }
@@ -489,7 +546,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 activePlayers.forEach(p => {
                     const item = document.createElement('div');
                     item.className = 'help-control-item';
-                    item.innerHTML = `<p>${p.name}: <span class="key">${p.keyDisplay}</span></p>`;
+                    let keysHTML = `<p>${p.name}: <span class="key">${p.keyDisplay}</span>`;
+                    if (startMode === 'two') {
+                        keysHTML += `<span class="key">${p.key2Display}</span></p>`;
+                    } else {
+                         keysHTML += `</p>`;
+                    }
+                    item.innerHTML = keysHTML;
                     item.style.borderColor = p.color;
                     helpControlsList.appendChild(item);
                 });
@@ -500,6 +563,12 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             closeAllModals();
         }
+    }
+    
+    function updateKeyConfigVisibility() {
+        document.querySelectorAll('.key-config-area[data-key-index="2"]').forEach(el => {
+            el.classList.toggle('hidden', startMode !== 'two');
+        });
     }
 
     function logMessage(message) {
@@ -512,6 +581,7 @@ document.addEventListener('DOMContentLoaded', () => {
         activePlayers.forEach(p => { p.scoreElement.textContent = `Score: ${p.score}`; });
     }
     
+    // --- Event Listeners ---
     document.addEventListener('keydown', handleKeyDown);
     document.addEventListener('keyup', handleKeyUp);
     newGameButton.addEventListener('click', initGame);
@@ -536,6 +606,9 @@ document.addEventListener('DOMContentLoaded', () => {
         drainRateValueDisplay.textContent = (parseFloat(drainRateSlider.value) / 10).toFixed(1);
         if (currentDifficulty === 'manual') updateGameParameters();
     });
+    // NEW: Start mechanic listeners
+    startModeSelect.addEventListener('change', updateGameParameters);
+    boostSlider.addEventListener('input', updateGameParameters);
 
     // --- Initializations ---
     function initializeDefaultPlayers() {
@@ -553,5 +626,5 @@ document.addEventListener('DOMContentLoaded', () => {
     populatePlayerDropdown();
     updateGridLayout();
     updateGameReadyState();
-    logMessage("Welcome! Two players are ready. Click 'New Game' to begin.");
+    logMessage("Welcome! Two players are ready. Customize settings or click 'New Game' to begin.");
 });

@@ -6,6 +6,7 @@
     --border-color: #3c3c3c;
     --title-color: #569cd6;
     --accent-color: #ce9178;
+    --force-bar-bg: #3e3e42;
 }
 
 body {
@@ -67,7 +68,7 @@ h4 {
     align-items: center;
     gap: 0.5rem;
 }
-#player-select, #add-player-button {
+#player-select, #add-player-button, #start-mode-select {
     padding: 0.5rem;
     font-size: 0.9rem;
     background-color: #3a3d41;
@@ -126,6 +127,8 @@ h4 {
     z-index: 1001;
     width: 90%;
     max-width: 600px;
+    max-height: 90vh;
+    overflow-y: auto;
 }
 .modal-content {
     position: relative;
@@ -196,12 +199,24 @@ h4 {
     display: inline-block;
 }
 
+.key-config-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    margin-top: 15px;
+}
 .key-config-area {
     display: flex;
     justify-content: center;
     align-items: center;
     gap: 10px;
-    margin-top: 15px;
+    width: 100%;
+}
+.key-label {
+    font-weight: bold;
+    color: #9cdcfe;
+    min-width: 50px;
 }
 .current-key-display {
     font-weight: bold;
@@ -245,6 +260,7 @@ h4 {
 .settings-group { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; gap: 10px; }
 .settings-group label { font-size: 0.9em; flex-shrink: 0; }
 .settings-group input[type="range"] { flex-grow: 1; max-width: 300px; }
+.settings-group select { flex-grow: 1; max-width: 300px; }
 .settings-group span { font-weight: bold; min-width: 30px; text-align: left; color: var(--accent-color); }
 input[type=range] { -webkit-appearance: none; appearance: none; background: transparent; cursor: pointer; }
 input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; border: 1px solid var(--border-color); height: 18px; width: 18px; border-radius: 50%; background: var(--title-color); margin-top: -7px; }
@@ -294,7 +310,10 @@ input[type=range]::-moz-range-track { width: 100%; height: 5px; cursor: pointer;
     border-radius: 3px; border: 1px solid #444; display: flex; align-items: center;
 }
 .lane .finish-line { position: absolute; right: 10px; top: 0; height: 100%; font-size: 2rem; display: flex; align-items: center; justify-content: center; }
-.horse { position: absolute; top: 25%; transform: translateY(-50%) scaleX(-1); font-size: 1.8rem; z-index: 10; }
+.horse { 
+    position: absolute; top: 25%; transform: translateY(-50%) scaleX(-1); font-size: 1.8rem; z-index: 10;
+    transition: opacity 0.3s, text-shadow 0.2s;
+}
 .remove-player-btn {
     position: absolute;
     top: -2px;
@@ -376,6 +395,9 @@ input[type=range]::-moz-range-track { width: 100%; height: 5px; cursor: pointer;
 }
 #help-modal .modal-content h3 { font-size: 1.2rem; color: var(--accent-color); border: none; }
 #help-modal p { line-height: 1.6; margin-bottom: 1.5rem; }
+#help-modal ul { padding-left: 20px; }
+#help-modal ul li { margin-bottom: 0.5rem; }
+
 #help-controls-list {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -400,7 +422,6 @@ input[type=range]::-moz-range-track { width: 100%; height: 5px; cursor: pointer;
     margin-left: 8px;
 }
 
-/* NEW: Audio Controls Styling */
 #audio-controls {
     margin-top: 2rem;
     border-top: 1px solid var(--border-color);

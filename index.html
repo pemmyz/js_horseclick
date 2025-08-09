@@ -11,7 +11,6 @@
     <div id="game-container">
         <div class="top-bar">
             <h1>Hevoskisat Clicker Challenge</h1>
-            <!-- NEW: Player Management UI -->
             <div id="player-management">
                 <select id="player-select"></select>
                 <button id="add-player-button">Add Player</button>
@@ -33,22 +32,33 @@
         </div>
 
         <div id="manual-controls" class="manual-controls-area hidden">
-            <h4>Manual Settings (applies on New Game)</h4>
+            <h4>Advanced Settings (applies on New Game)</h4>
             <div class="settings-group">
                 <label for="increment-slider">Tap Power (<span id="increment-value-display">8</span>): </label>
                 <input type="range" id="increment-slider" min="5" max="25" value="8">
             </div>
             <div class="settings-group">
                 <label for="drain-rate-slider">Force Drain (<span id="drain-rate-value-display">0.7</span>): </label>
-                <input type="range" id="drain-rate-slider" min="1" max="10" value="7"> <!-- Maps to 0.1 - 1.0 -->
+                <input type="range" id="drain-rate-slider" min="1" max="10" value="7">
+            </div>
+             <!-- NEW: Start Mechanic Settings -->
+            <div class="settings-group">
+                <label for="start-mode-select">Start Mode: </label>
+                <select id="start-mode-select">
+                    <option value="single" selected>Perfect Start (Single Button)</option>
+                    <option value="two">Perfect Start (Two Buttons)</option>
+                    <option value="disabled">Disabled</option>
+                </select>
+            </div>
+            <div class="settings-group" id="boost-slider-group">
+                <label for="boost-slider">Start Boost (<span id="boost-value-display">1.0</span>x width): </label>
+                <input type="range" id="boost-slider" min="5" max="20" value="10"> <!-- Maps to 0.5 - 2.0 -->
             </div>
         </div>
 
         <div id="winner-announcement"></div>
         <div id="countdown-display">Add a player to begin!</div>
-        
-        <!-- REMOVED: Static instructions paragraph is no longer needed -->
-        
+
         <div id="race-track">
             <!-- Player lanes will be added here by JS -->
         </div>
@@ -70,27 +80,36 @@
     <div id="customize-modal" class="hidden">
         <div class="modal-content">
             <button id="close-modal-button" class="close-button">×</button>
-            <h2>Customize Vehicles</h2>
-            <!-- Sections for each player's vehicle will be added here by JS -->
+            <h2>Customize Vehicles & Controls</h2>
             <div id="customize-player-list"></div>
         </div>
     </div>
 
-    <!-- NEW: Help Modal -->
+    <!-- Help Modal -->
     <div id="help-modal" class="hidden">
         <div class="modal-content">
             <button id="close-help-button" class="close-button">×</button>
             <h2>How to Play</h2>
             <h3>Goal</h3>
             <p>Be the first player to get your vehicle across the finish line! 🏁</p>
+
+            <!-- NEW: Start Mechanic Help Section -->
+            <h3>Starting the Race</h3>
+            <p>A good start is crucial! After the countdown, the "GO!" signal will appear.
+                <ul>
+                    <li><strong>Perfect Start:</strong> Press your key(s) right as "GO!" appears to get a starting boost. The boost size can be changed in the advanced settings.</li>
+                    <li><strong>False Start:</strong> Pressing your key before "GO!" will cause you to stall for a moment after the race begins. Don't jump the gun!</li>
+                    <li><strong>Start Modes:</strong> You can choose between a classic single-button start or a more challenging two-button start in the advanced settings.</li>
+                </ul>
+            </p>
+
             <h3>Gameplay</h3>
-            <p>Press your assigned key as quickly as you can to build up force. The more force you have, the faster your vehicle will move. But be careful, your force drains over time, so you need to keep tapping!</p>
+            <p>Once the race is on, press your assigned key(s) as quickly as you can to build up force. The more force you have, the faster your vehicle will move. But be careful, your force drains over time, so you need to keep tapping!</p>
             <h3>Active Player Controls</h3>
             <div id="help-controls-list">
                 <!-- Player controls will be listed here by JS -->
             </div>
-            
-            <!-- NEW: Audio Controls -->
+
             <div id="audio-controls">
                 <h3>Audio Settings</h3>
                 <div class="audio-setting-item">
@@ -101,10 +120,8 @@
             </div>
         </div>
     </div>
-    
-    <!-- NEW: Help Prompt -->
-    <div id="help-prompt">Press H key for Help</div>
 
+    <div id="help-prompt">Press H key for Help</div>
 
     <script src="script.js"></script>
 </body>
