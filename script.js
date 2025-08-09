@@ -19,14 +19,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const helpControlsList = document.getElementById('help-controls-list');
     const helpPrompt = document.getElementById('help-prompt');
     const difficultyRadios = document.querySelectorAll('input[name="difficulty"]');
-    const manualControlsArea = document.getElementById('manual-controls');
     const incrementSlider = document.getElementById('increment-slider');
     const incrementValueDisplay = document.getElementById('increment-value-display');
     const drainRateSlider = document.getElementById('drain-rate-slider');
     const drainRateValueDisplay = document.getElementById('drain-rate-value-display');
     const volumeSlider = document.getElementById('volume-slider');
     const muteButton = document.getElementById('mute-button');
-    // NEW: Start Mechanic DOM elements
     const startModeSelect = document.getElementById('start-mode-select');
     const boostSlider = document.getElementById('boost-slider');
     const boostValueDisplay = document.getElementById('boost-value-display');
@@ -45,7 +43,6 @@ document.addEventListener('DOMContentLoaded', () => {
         medium: { increment: 12, drainRate: 0.4, drainSlider: 4 },
         hard:   { increment: 8,  drainRate: 0.7, drainSlider: 7 }
     };
-    // NEW: Added second keys for two-button mode
     const availablePlayers = [
         { id: 'p1', name: 'Player 1', key: 'w', keyDisplay: 'W', key2: 'e', key2Display: 'E', color: '#ff8a65' },
         { id: 'p2', name: 'Player 2', key: 'arrowup', keyDisplay: 'Up Arrow', key2: 'arrowdown', key2Display: 'Down Arrow', color: '#64b5f6' },
@@ -53,7 +50,6 @@ document.addEventListener('DOMContentLoaded', () => {
         { id: 'p4', name: 'Player 4', key: 'p', keyDisplay: 'P', key2: 'o', key2Display: 'O', color: '#ffd54f' }
     ];
     const vehicleOptions = ['🏇', '🏎', '🎠', '🏃‍♂️', '🚴‍♀️'];
-    // NEW: Start Mechanic settings
     const PERFECT_START_WINDOW_MS = 250;
     const FALSE_START_STALL_MS = 1500;
     
@@ -65,9 +61,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentDifficulty = 'hard';
     let countdownInterval;
     let playerToChangeKey = null;
-    let keyToChangeIndex = 1; // 1 for primary, 2 for secondary
-    // NEW: Start Mechanic State
-    let startMode = 'single'; // 'single', 'two', or 'disabled'
+    let keyToChangeIndex = 1; 
+    let startMode = 'single'; // Default start mode
     let startBoostMultiplier = 1.0;
     let preGameListenersActive = false;
 
@@ -123,7 +118,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         addPlayerButton.disabled = unselectedPlayers.length === 0 || activePlayers.length >= 4;
     }
-
     function addPlayer() {
         if (playerSelect.value) {
             const playerData = availablePlayers.find(p => p.id === playerSelect.value);
@@ -134,7 +128,6 @@ document.addEventListener('DOMContentLoaded', () => {
             updateGameReadyState();
         }
     }
-
     function removePlayer(playerId) {
         const playerIndex = activePlayers.findIndex(p => p.id === playerId);
         if (playerIndex > -1) {
@@ -148,7 +141,6 @@ document.addEventListener('DOMContentLoaded', () => {
             updateGameReadyState();
         }
     }
-
     function createPlayer(playerData) {
         const laneContainer = document.createElement('div');
         laneContainer.className = 'lane-container';
@@ -161,7 +153,6 @@ document.addEventListener('DOMContentLoaded', () => {
             <button class="remove-player-btn" data-player-id="${playerData.id}" title="Remove Player">×</button>
         `;
         raceTrack.appendChild(laneContainer);
-
         const controlGroup = document.createElement('div');
         controlGroup.className = 'control-group';
         controlGroup.innerHTML = `
@@ -172,12 +163,11 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
         `;
         controlsContainer.appendChild(controlGroup);
-
         const customizeSection = document.createElement('div');
         customizeSection.className = 'customize-player-section';
         customizeSection.dataset.playerId = playerData.id;
         customizeSection.innerHTML = `
-            <h4 style="color: ${playerData.color};">${playerData.name} Vehicle: <span class="current-vehicle">🏇</span></h4>
+            <h4 style="color: ${playerData.color};">${playerData.name} Controls & Vehicle</h4>
             <div class="vehicle-selector">
                 ${vehicleOptions.map(v => `<button class="vehicle-btn" data-vehicle="${v}">${v}</button>`).join('')}
             </div>
@@ -195,7 +185,6 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
         `;
         customizePlayerList.appendChild(customizeSection);
-
         const playerObject = {
             ...playerData, sprite: '🏇', force: 0, position: 0, isKeyDown: false, score: 0,
             laneElement: laneContainer,
@@ -205,18 +194,15 @@ document.addEventListener('DOMContentLoaded', () => {
             controlsElement: controlGroup,
             controlsTitleElement: controlGroup.querySelector('h3'),
             customizeElement: customizeSection,
-            currentVehicleElement: customizeSection.querySelector('.current-vehicle'),
             keyDisplayElement1: customizeSection.querySelector('[data-key-index="1"] .current-key-display'),
             keyDisplayElement2: customizeSection.querySelector('[data-key-index="2"] .current-key-display'),
-            // NEW: State for start mechanic
-            startState: 'waiting', // 'waiting', 'false_start', 'boosted'
+            startState: 'waiting',
             isStalled: false,
             goKey1Pressed: false,
             goKey2Pressed: false,
         };
         activePlayers.push(playerObject);
-        updateKeyConfigVisibility(); // Hide/show second key based on current mode
-        
+        updateKeyConfigVisibility();
         const pressAction = (e) => {
             e.preventDefault();
             if (!gameActive || playerObject.isKeyDown || playerObject.isStalled) return;
@@ -232,12 +218,10 @@ document.addEventListener('DOMContentLoaded', () => {
         playerObject.controlsElement.addEventListener('touchend', releaseAction);
         laneContainer.querySelector('.remove-player-btn').addEventListener('click', () => removePlayer(playerData.id));
     }
-    
     function updateGridLayout() {
         const numPlayers = activePlayers.length > 0 ? activePlayers.length : 1;
         controlsContainer.style.gridTemplateColumns = `repeat(${numPlayers}, 1fr)`;
     }
-
     function updateGameReadyState() {
         const canStart = activePlayers.length > 0;
         newGameButton.disabled = !canStart || preGameListenersActive;
@@ -257,9 +241,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const settings = difficultySettings[currentDifficulty];
             incrementPerTap = settings.increment;
             drainRate = settings.drainRate;
+            // Update sliders to reflect preset
             incrementSlider.value = incrementPerTap;
             drainRateSlider.value = settings.drainSlider;
         }
+        // Always update display values from sliders
         incrementValueDisplay.textContent = incrementSlider.value;
         drainRateValueDisplay.textContent = (parseFloat(drainRateSlider.value) / 10).toFixed(1);
 
@@ -277,7 +263,6 @@ document.addEventListener('DOMContentLoaded', () => {
         winnerAnnEl.innerHTML = '';
         winnerAnnEl.className = '';
         updateGameReadyState();
-        
         activePlayers.forEach(p => {
             p.horseElement.innerHTML = p.sprite;
             p.horseElement.style.transform = `translateX(0px) scaleX(-1)`;
@@ -286,7 +271,6 @@ document.addEventListener('DOMContentLoaded', () => {
             p.forceBarElement.style.height = '0%';
             p.position = 0;
             p.force = 0;
-            // NEW: Reset start mechanic state
             p.startState = 'waiting';
             p.isStalled = false;
             p.goKey1Pressed = false;
@@ -298,9 +282,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (activePlayers.length === 0) return logMessage("⚠️ Add at least one player to start a game.");
         if (audioContext && audioContext.state === 'suspended') audioContext.resume();
         if (countdownInterval) clearInterval(countdownInterval);
-
         prepareGameBoard();
-        
         if (startMode !== 'disabled') {
             document.addEventListener('keydown', handlePreGameKeyDown);
             preGameListenersActive = true;
@@ -313,7 +295,6 @@ document.addEventListener('DOMContentLoaded', () => {
         let count = duration;
         countdownDisplay.textContent = `${textPrefix} ${count}`;
         playSound({ frequency: 330, duration: 0.15, type: 'sine' });
-
         countdownInterval = setInterval(() => {
             count--;
             if (count > 0) {
@@ -321,20 +302,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 playSound({ frequency: 330, duration: 0.15, type: 'sine' });
             } else {
                 clearInterval(countdownInterval);
-                document.removeEventListener('keydown', handlePreGameKeyDown); // Stop listening for false starts
-                
+                document.removeEventListener('keydown', handlePreGameKeyDown);
                 countdownDisplay.textContent = 'GO!';
                 playSound({ frequency: 523, duration: 0.3, type: 'square' });
-                
                 if (startMode !== 'disabled') {
                     document.addEventListener('keydown', handleGoKeyDown);
-                    // After the "perfect start" window, remove the listener and start the race.
                     setTimeout(() => {
                         document.removeEventListener('keydown', handleGoKeyDown);
                         startGame();
                     }, PERFECT_START_WINDOW_MS);
                 } else {
-                    startGame(); // No start mechanic, just go
+                    startGame();
                 }
             }
         }, 1000);
@@ -353,7 +331,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
         }
-
         // Apply boosts and penalties
         activePlayers.forEach(p => {
             if (p.startState === 'boosted') {
@@ -364,11 +341,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 setTimeout(() => {
                     p.isStalled = false;
                     p.horseElement.style.opacity = '1';
-                    logMessage(`🏃 ${p.name} can now move!`);
+                    logMessage(`👍 ${p.name} can now move!`);
                 }, FALSE_START_STALL_MS);
             }
         });
-        
         logMessage(`📣🏁 The race has begun!`);
         gameActive = true;
         lastTime = 0;
@@ -381,7 +357,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!lastTime) lastTime = currentTime;
         const deltaTime = (currentTime - lastTime) / 1000;
         lastTime = currentTime;
-
         activePlayers.forEach(p => {
             if (p.force > 0) {
                 p.force -= drainRate;
@@ -394,7 +369,6 @@ document.addEventListener('DOMContentLoaded', () => {
             p.horseElement.style.transform = `translateX(${p.position}px) scaleX(-1)`;
             p.forceBarElement.style.height = `${p.force}%`;
         });
-
         checkWinCondition();
         requestAnimationFrame(gameLoop);
     }
@@ -422,10 +396,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.key === 'h' || e.key === 'H') { e.preventDefault(); toggleHelpModal(); return; }
         if (e.key === 'Escape') { closeAllModals(); return; }
         if (!gameActive) return;
-
         const key = e.key.toLowerCase();
         const player = activePlayers.find(p => p.key === key);
-
         if (player && !player.isKeyDown && !player.isStalled) {
             e.preventDefault();
             player.isKeyDown = true;
@@ -438,14 +410,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const player = activePlayers.find(p => p.key === key);
         if (player) player.isKeyDown = false;
     }
-
-    // NEW: Handlers for start mechanic
     function handlePreGameKeyDown(e) {
         const key = e.key.toLowerCase();
         const player = activePlayers.find(p => p.key === key || p.key2 === key);
         if (player && player.startState === 'waiting') {
             player.startState = 'false_start';
-            logMessage(`💥 ${player.name} jumped the gun! (False Start)`);
+            logMessage(`💥 ${player.name} jumped the gun! (FALSE START)`);
             playSound({ frequency: 220, duration: 0.3, type: 'sawtooth' });
             player.horseElement.style.opacity = '0.4';
         }
@@ -454,7 +424,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const key = e.key.toLowerCase();
         const player = activePlayers.find(p => p.key === key || p.key2 === key);
         if (!player || player.startState !== 'waiting') return;
-
         if (startMode === 'single' && key === player.key) {
             player.startState = 'boosted';
             logMessage(`🚀 ${player.name} gets a PERFECT START!`);
@@ -463,7 +432,6 @@ document.addEventListener('DOMContentLoaded', () => {
         } else if (startMode === 'two') {
             if (key === player.key) player.goKey1Pressed = true;
             if (key === player.key2) player.goKey2Pressed = true;
-            // The actual state change to 'boosted' happens in startGame for this mode
         }
     }
     
@@ -473,16 +441,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const keyBtn = e.target.closest('.change-key-btn');
         if (vehicleBtn) {
             const player = activePlayers.find(p => p.id === vehicleBtn.closest('.customize-player-section').dataset.playerId);
-            if(player) {
+            if (player) {
                 player.sprite = vehicleBtn.dataset.vehicle;
-                player.currentVehicleElement.textContent = vehicleBtn.dataset.vehicle;
                 player.horseElement.innerHTML = vehicleBtn.dataset.vehicle;
             }
         } else if (keyBtn && !playerToChangeKey) {
             startKeyChange(keyBtn);
         }
     }
-
     function startKeyChange(button) {
         playerToChangeKey = activePlayers.find(p => p.id === button.dataset.playerId);
         keyToChangeIndex = parseInt(button.dataset.keyIndex);
@@ -490,21 +456,18 @@ document.addEventListener('DOMContentLoaded', () => {
         button.classList.add('is-listening');
         document.addEventListener('keydown', handleKeySelection, { once: true });
     }
-    
     function getKeyDisplay(e) {
         if (e.key === ' ') return 'Space';
         if (e.key.includes('Arrow')) return e.key.replace('Arrow', '') + ' Arrow';
         return e.key.length === 1 ? e.key.toUpperCase() : e.key;
     }
-
     function handleKeySelection(e) {
         e.preventDefault();
         const newKey = e.key.toLowerCase();
         const newKeyDisplay = getKeyDisplay(e);
         const isKeyInUse = activePlayers.some(p => (p.key === newKey || p.key2 === newKey) && p.id !== playerToChangeKey.id);
-
         if (isKeyInUse) {
-            alert(`Key "${newKeyDisplay}" is already in use. Please choose another.`);
+            alert(`Key "${newKeyDisplay}" is already in use.`);
         } else {
             if (keyToChangeIndex === 1) {
                 playerToChangeKey.key = newKey;
@@ -517,16 +480,17 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             playerToChangeKey.controlsTitleElement.textContent = `${playerToChangeKey.name} (${playerToChangeKey.keyDisplay})`;
         }
-        
         const button = playerToChangeKey.customizeElement.querySelector(`.change-key-btn[data-key-index="${keyToChangeIndex}"]`);
         button.textContent = 'Change Key';
         button.classList.remove('is-listening');
         playerToChangeKey = null;
     }
-
-    function openModal(modal) { modalOverlay.classList.remove('hidden'); modal.classList.remove('hidden'); }
+    function openModal(modal) {
+        modalOverlay.classList.remove('hidden');
+        modal.classList.remove('hidden');
+    }
     function closeAllModals() {
-        if (playerToChangeKey) { // Cancel an in-progress key change
+        if (playerToChangeKey) {
             const button = playerToChangeKey.customizeElement.querySelector('.is-listening');
             if (button) { button.textContent = 'Change Key'; button.classList.remove('is-listening'); }
             playerToChangeKey = null;
@@ -536,9 +500,9 @@ document.addEventListener('DOMContentLoaded', () => {
         customizeModal.classList.add('hidden');
         helpModal.classList.add('hidden');
     }
-
-    function openCustomizeModal() { openModal(customizeModal); }
-
+    function openCustomizeModal() {
+        openModal(customizeModal);
+    }
     function toggleHelpModal() {
         if (helpModal.classList.contains('hidden')) {
             helpControlsList.innerHTML = '';
@@ -550,7 +514,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (startMode === 'two') {
                         keysHTML += `<span class="key">${p.key2Display}</span></p>`;
                     } else {
-                         keysHTML += `</p>`;
+                        keysHTML += `</p>`;
                     }
                     item.innerHTML = keysHTML;
                     item.style.borderColor = p.color;
@@ -564,13 +528,11 @@ document.addEventListener('DOMContentLoaded', () => {
             closeAllModals();
         }
     }
-    
     function updateKeyConfigVisibility() {
         document.querySelectorAll('.key-config-area[data-key-index="2"]').forEach(el => {
             el.classList.toggle('hidden', startMode !== 'two');
         });
     }
-
     function logMessage(message) {
         const li = document.createElement('li');
         li.textContent = message;
@@ -595,20 +557,22 @@ document.addEventListener('DOMContentLoaded', () => {
     
     difficultyRadios.forEach(radio => radio.addEventListener('change', (e) => {
         currentDifficulty = e.target.value;
-        manualControlsArea.classList.toggle('hidden', currentDifficulty !== 'manual');
-        updateGameParameters();
+        updateGameParameters(); // This will now update the sliders in the modal
     }));
-    incrementSlider.addEventListener('input', () => {
-        incrementValueDisplay.textContent = incrementSlider.value;
-        if (currentDifficulty === 'manual') updateGameParameters();
-    });
-    drainRateSlider.addEventListener('input', () => {
-        drainRateValueDisplay.textContent = (parseFloat(drainRateSlider.value) / 10).toFixed(1);
-        if (currentDifficulty === 'manual') updateGameParameters();
-    });
-    // NEW: Start mechanic listeners
-    startModeSelect.addEventListener('change', updateGameParameters);
-    boostSlider.addEventListener('input', updateGameParameters);
+
+    function handleManualControlChange() {
+        const manualRadio = document.querySelector('input[name="difficulty"][value="manual"]');
+        if (manualRadio && !manualRadio.checked) {
+            manualRadio.checked = true;
+            currentDifficulty = 'manual';
+        }
+        updateGameParameters();
+    }
+    
+    incrementSlider.addEventListener('input', handleManualControlChange);
+    drainRateSlider.addEventListener('input', handleManualControlChange);
+    startModeSelect.addEventListener('change', handleManualControlChange);
+    boostSlider.addEventListener('input', handleManualControlChange);
 
     // --- Initializations ---
     function initializeDefaultPlayers() {
@@ -626,5 +590,5 @@ document.addEventListener('DOMContentLoaded', () => {
     populatePlayerDropdown();
     updateGridLayout();
     updateGameReadyState();
-    logMessage("Welcome! Two players are ready. Customize settings or click 'New Game' to begin.");
+    logMessage("Welcome! Customize settings or click 'New Game' to begin.");
 });

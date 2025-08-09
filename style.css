@@ -248,15 +248,28 @@ h4 {
     border-color: #a56d54;
 }
 
-.difficulty-settings, .manual-controls-area {
+.difficulty-settings {
     margin-bottom: 1rem; padding: 1rem; border: 1px solid var(--border-color);
     border-radius: 8px; background-color: var(--bg-color);
 }
-.difficulty-settings h3, .manual-controls-area h4 { margin-bottom: 10px; font-size: 1.1em; border: none; text-align: left; }
+.difficulty-settings h3 { margin-bottom: 10px; font-size: 1.1em; border: none; text-align: left; }
 .difficulty-options { display: flex; justify-content: center; gap: 15px; flex-wrap: wrap; }
 .difficulty-options label { cursor: pointer; padding: 5px 8px; border-radius: 4px; transition: background-color 0.2s; }
 .difficulty-options label:hover { background-color: var(--force-bar-bg); }
 .difficulty-options input[type="radio"] { margin-right: 5px; }
+
+/* Styling for the settings area now inside the modal */
+.manual-controls-area {
+    margin-top: 2rem;
+    padding: 1rem 1rem 0 1rem;
+    border-top: 2px solid var(--border-color);
+}
+.manual-controls-area h4 {
+    margin-bottom: 1rem;
+    font-size: 1.1em;
+    border: none;
+    text-align: left;
+}
 .settings-group { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; gap: 10px; }
 .settings-group label { font-size: 0.9em; flex-shrink: 0; }
 .settings-group input[type="range"] { flex-grow: 1; max-width: 300px; }
