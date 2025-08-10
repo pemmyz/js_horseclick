@@ -29,6 +29,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const boostSlider = document.getElementById('boost-slider');
     const boostValueDisplay = document.getElementById('boost-value-display');
     const boostSliderGroup = document.getElementById('boost-slider-group');
+    // NEW: Reference for the false start penalty setting
+    const falseStartPenaltySelect = document.getElementById('false-start-penalty-select');
+    const falseStartPenaltyGroup = document.getElementById('false-start-penalty-group');
+
 
     // --- Audio Setup ---
     let audioContext;
@@ -62,8 +66,9 @@ document.addEventListener('DOMContentLoaded', () => {
     let countdownInterval;
     let playerToChangeKey = null;
     let keyToChangeIndex = 1; 
-    let startMode = 'single'; // Default start mode
+    let startMode = 'single';
     let startBoostMultiplier = 1.0;
+    let falseStartPenalty = 'stall'; // NEW: State for false start penalty
     let preGameListenersActive = false;
 
 
@@ -241,18 +246,24 @@ document.addEventListener('DOMContentLoaded', () => {
             const settings = difficultySettings[currentDifficulty];
             incrementPerTap = settings.increment;
             drainRate = settings.drainRate;
-            // Update sliders to reflect preset
             incrementSlider.value = incrementPerTap;
             drainRateSlider.value = settings.drainSlider;
         }
-        // Always update display values from sliders
         incrementValueDisplay.textContent = incrementSlider.value;
         drainRateValueDisplay.textContent = (parseFloat(drainRateSlider.value) / 10).toFixed(1);
 
         startMode = startModeSelect.value;
         startBoostMultiplier = parseFloat(boostSlider.value) / 10;
         boostValueDisplay.textContent = startBoostMultiplier.toFixed(1);
-        boostSliderGroup.classList.toggle('hidden', startMode === 'disabled');
+        
+        // NEW: Read the false start penalty setting
+        falseStartPenalty = falseStartPenaltySelect.value;
+
+        // UPDATED: Hide related controls if start system is disabled
+        const startSystemDisabled = startMode === 'disabled';
+        boostSliderGroup.classList.toggle('hidden', startSystemDisabled);
+        falseStartPenaltyGroup.classList.toggle('hidden', startSystemDisabled);
+        
         updateKeyConfigVisibility();
     }
     
@@ -320,7 +331,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function startGame() {
         preGameListenersActive = false;
-        // Final check for two-button mode success
         if (startMode === 'two') {
             activePlayers.forEach(p => {
                 if (p.startState === 'waiting' && p.goKey1Pressed && p.goKey2Pressed) {
@@ -331,7 +341,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
         }
-        // Apply boosts and penalties
         activePlayers.forEach(p => {
             if (p.startState === 'boosted') {
                 const boostPixels = p.horseElement.clientWidth * startBoostMultiplier;
@@ -375,7 +384,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function checkWinCondition() {
         if (activePlayers.length === 0) return;
-        const trackWidth = raceTrack.querySelector('.lane').clientWidth - 60; // Approx finish line area
+        const trackWidth = raceTrack.querySelector('.lane').clientWidth - 60;
         const winner = activePlayers.find(p => p.position >= trackWidth);
         if (winner) endGame(winner);
     }
@@ -410,23 +419,31 @@ document.addEventListener('DOMContentLoaded', () => {
         const player = activePlayers.find(p => p.key === key);
         if (player) player.isKeyDown = false;
     }
+
     function handlePreGameKeyDown(e) {
         const key = e.key.toLowerCase();
         const player = activePlayers.find(p => p.key === key || p.key2 === key);
         if (player && player.startState === 'waiting') {
-            player.startState = 'false_start';
-            logMessage(`💥 ${player.name} jumped the gun! (FALSE START)`);
-            playSound({ frequency: 220, duration: 0.3, type: 'sawtooth' });
-            player.horseElement.style.opacity = '0.4';
+            // UPDATED: Check if the penalty is active before applying it
+            if (falseStartPenalty === 'stall') {
+                player.startState = 'false_start';
+                logMessage(`💥 ${player.name} jumped the gun! (FALSE START)`);
+                playSound({ frequency: 220, duration: 0.3, type: 'sawtooth' });
+                player.horseElement.style.opacity = '0.4';
+            } else {
+                // If penalty is 'none', the key press is simply ignored.
+                // You could add a log message here if you want.
+            }
         }
     }
+
     function handleGoKeyDown(e) {
         const key = e.key.toLowerCase();
         const player = activePlayers.find(p => p.key === key || p.key2 === key);
         if (!player || player.startState !== 'waiting') return;
         if (startMode === 'single' && key === player.key) {
             player.startState = 'boosted';
-            logMessage(`🚀 ${player.name} gets a PERFECT START!`);
+            logMessage(`🚀 ${p.name} gets a PERFECT START!`);
             playSound({ frequency: 660, duration: 0.2, type: 'triangle', volume: 0.2 });
             player.horseElement.style.textShadow = '0 0 10px #f0e68c';
         } else if (startMode === 'two') {
@@ -557,7 +574,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     difficultyRadios.forEach(radio => radio.addEventListener('change', (e) => {
         currentDifficulty = e.target.value;
-        updateGameParameters(); // This will now update the sliders in the modal
+        updateGameParameters();
     }));
 
     function handleManualControlChange() {
@@ -573,6 +590,8 @@ document.addEventListener('DOMContentLoaded', () => {
     drainRateSlider.addEventListener('input', handleManualControlChange);
     startModeSelect.addEventListener('change', handleManualControlChange);
     boostSlider.addEventListener('input', handleManualControlChange);
+    // NEW: Add event listener for the new setting
+    falseStartPenaltySelect.addEventListener('change', handleManualControlChange);
 
     // --- Initializations ---
     function initializeDefaultPlayers() {

@@ -31,8 +31,6 @@
             </div>
         </div>
 
-        <!-- MOVED: The manual-controls div is no longer here. -->
-
         <div id="winner-announcement"></div>
         <div id="countdown-display">Add a player to begin!</div>
 
@@ -63,7 +61,6 @@
                 <!-- Sections for each player's vehicle will be added here by JS -->
             </div>
 
-            <!-- NEW LOCATION: Advanced Settings now live inside the modal -->
             <div id="manual-controls" class="manual-controls-area">
                 <h4>Advanced Settings (applies on New Game)</h4>
                 <div class="settings-group">
@@ -80,6 +77,13 @@
                         <option value="single" selected>Perfect Start (Single Button)</option>
                         <option value="two">Perfect Start (Two Buttons)</option>
                         <option value="disabled">Disabled</option>
+                    </select>
+                </div>
+                <div class="settings-group" id="false-start-penalty-group">
+                    <label for="false-start-penalty-select">False Start Penalty: </label>
+                    <select id="false-start-penalty-select">
+                        <option value="stall" selected>Stall at Start</option>
+                        <option value="none">No Penalty</option>
                     </select>
                 </div>
                 <div class="settings-group" id="boost-slider-group">
@@ -102,7 +106,7 @@
             <p>A good start is crucial! After the countdown, the "GO!" signal will appear.
                 <ul>
                     <li><strong>Perfect Start:</strong> Press your key(s) right as "GO!" appears to get a starting boost. The boost size can be changed in the advanced settings inside the Customize menu.</li>
-                    <li><strong>False Start:</strong> Pressing your key before "GO!" will cause you to stall for a moment after the race begins. Don't jump the gun!</li>
+                    <li><strong>False Start:</strong> Pressing your key before "GO!" will cause you to stall for a moment after the race begins. Don't jump the gun! You can disable this penalty in the advanced settings.</li>
                     <li><strong>Start Modes:</strong> You can choose between a classic single-button start or a more challenging two-button start in the advanced settings.</li>
                 </ul>
             </p>
