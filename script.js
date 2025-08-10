@@ -29,7 +29,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const boostSlider = document.getElementById('boost-slider');
     const boostValueDisplay = document.getElementById('boost-value-display');
     const boostSliderGroup = document.getElementById('boost-slider-group');
-    // NEW: Reference for the false start penalty setting
     const falseStartPenaltySelect = document.getElementById('false-start-penalty-select');
     const falseStartPenaltyGroup = document.getElementById('false-start-penalty-group');
 
@@ -68,7 +67,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let keyToChangeIndex = 1; 
     let startMode = 'single';
     let startBoostMultiplier = 1.0;
-    let falseStartPenalty = 'stall'; // NEW: State for false start penalty
+    let falseStartPenalty = 'stall';
     let preGameListenersActive = false;
 
 
@@ -256,10 +255,8 @@ document.addEventListener('DOMContentLoaded', () => {
         startBoostMultiplier = parseFloat(boostSlider.value) / 10;
         boostValueDisplay.textContent = startBoostMultiplier.toFixed(1);
         
-        // NEW: Read the false start penalty setting
         falseStartPenalty = falseStartPenaltySelect.value;
 
-        // UPDATED: Hide related controls if start system is disabled
         const startSystemDisabled = startMode === 'disabled';
         boostSliderGroup.classList.toggle('hidden', startSystemDisabled);
         falseStartPenaltyGroup.classList.toggle('hidden', startSystemDisabled);
@@ -278,7 +275,8 @@ document.addEventListener('DOMContentLoaded', () => {
             p.horseElement.innerHTML = p.sprite;
             p.horseElement.style.transform = `translateX(0px) scaleX(-1)`;
             p.horseElement.style.opacity = '1';
-            p.horseElement.style.textShadow = 'none';
+            // UPDATED: Remove the highlight class on new game
+            p.horseElement.classList.remove('perfect-start-highlight');
             p.forceBarElement.style.height = '0%';
             p.position = 0;
             p.force = 0;
@@ -335,14 +333,15 @@ document.addEventListener('DOMContentLoaded', () => {
             activePlayers.forEach(p => {
                 if (p.startState === 'waiting' && p.goKey1Pressed && p.goKey2Pressed) {
                     p.startState = 'boosted';
-                    logMessage(`🚀 ${p.name} gets a PERFECT START!`);
-                    playSound({ frequency: 660, duration: 0.2, type: 'triangle', volume: 0.2 });
-                    p.horseElement.style.textShadow = '0 0 10px #f0e68c';
                 }
             });
         }
         activePlayers.forEach(p => {
             if (p.startState === 'boosted') {
+                logMessage(`🚀 ${p.name} gets a PERFECT START!`);
+                playSound({ frequency: 660, duration: 0.2, type: 'triangle', volume: 0.2 });
+                // UPDATED: Add highlight class instead of direct style
+                p.horseElement.classList.add('perfect-start-highlight');
                 const boostPixels = p.horseElement.clientWidth * startBoostMultiplier;
                 p.position += boostPixels;
             } else if (p.startState === 'false_start') {
@@ -424,15 +423,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const key = e.key.toLowerCase();
         const player = activePlayers.find(p => p.key === key || p.key2 === key);
         if (player && player.startState === 'waiting') {
-            // UPDATED: Check if the penalty is active before applying it
             if (falseStartPenalty === 'stall') {
                 player.startState = 'false_start';
                 logMessage(`💥 ${player.name} jumped the gun! (FALSE START)`);
                 playSound({ frequency: 220, duration: 0.3, type: 'sawtooth' });
                 player.horseElement.style.opacity = '0.4';
-            } else {
-                // If penalty is 'none', the key press is simply ignored.
-                // You could add a log message here if you want.
             }
         }
     }
@@ -443,9 +438,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!player || player.startState !== 'waiting') return;
         if (startMode === 'single' && key === player.key) {
             player.startState = 'boosted';
-            logMessage(`🚀 ${p.name} gets a PERFECT START!`);
-            playSound({ frequency: 660, duration: 0.2, type: 'triangle', volume: 0.2 });
-            player.horseElement.style.textShadow = '0 0 10px #f0e68c';
         } else if (startMode === 'two') {
             if (key === player.key) player.goKey1Pressed = true;
             if (key === player.key2) player.goKey2Pressed = true;
@@ -590,7 +582,6 @@ document.addEventListener('DOMContentLoaded', () => {
     drainRateSlider.addEventListener('input', handleManualControlChange);
     startModeSelect.addEventListener('change', handleManualControlChange);
     boostSlider.addEventListener('input', handleManualControlChange);
-    // NEW: Add event listener for the new setting
     falseStartPenaltySelect.addEventListener('change', handleManualControlChange);
 
     // --- Initializations ---
