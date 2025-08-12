@@ -69,6 +69,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let startBoostMultiplier = 1.0;
     let falseStartPenalty = 'stall';
     let preGameListenersActive = false;
+    let preCountdownTimeout = null;
+    let preCountdownEndTime = 0;
 
 
     // --- Audio Functions ---
@@ -226,17 +228,35 @@ document.addEventListener('DOMContentLoaded', () => {
         const numPlayers = activePlayers.length > 0 ? activePlayers.length : 1;
         controlsContainer.style.gridTemplateColumns = `repeat(${numPlayers}, 1fr)`;
     }
+    
+    // UPDATED: Simplified ready state. Button is only disabled if no players exist.
     function updateGameReadyState() {
-        const canStart = activePlayers.length > 0;
-        newGameButton.disabled = !canStart || preGameListenersActive;
-        if (!canStart) {
+        newGameButton.disabled = activePlayers.length === 0;
+
+        if (activePlayers.length === 0) {
             countdownDisplay.textContent = 'Add a player to begin!';
-        } else if (!gameActive && !preGameListenersActive) {
+        } else if (!gameActive && preCountdownEndTime === 0 && !countdownInterval) {
             countdownDisplay.textContent = 'Press New Game to start';
         }
     }
 
     // --- Game Logic & Flow ---
+    
+    // NEW: Central function to cancel all ongoing game activities.
+    function resetAllTimersAndLoops() {
+        gameActive = false; // This will stop the gameLoop from running
+        clearTimeout(preCountdownTimeout);
+        preCountdownTimeout = null;
+        preCountdownEndTime = 0;
+        clearInterval(countdownInterval);
+        countdownInterval = null;
+        
+        // Clean up any lingering key listeners
+        document.removeEventListener('keydown', handlePreGameKeyDown);
+        document.removeEventListener('keydown', handleGoKeyDown);
+        preGameListenersActive = false;
+    }
+    
     function updateGameParameters() {
         if (currentDifficulty === 'manual') {
             incrementPerTap = parseInt(incrementSlider.value);
@@ -265,17 +285,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     function prepareGameBoard() {
-        gameActive = false;
         updateGameParameters();
-        logList.innerHTML = '';
         winnerAnnEl.innerHTML = '';
         winnerAnnEl.className = '';
-        updateGameReadyState();
         activePlayers.forEach(p => {
             p.horseElement.innerHTML = p.sprite;
             p.horseElement.style.transform = `translateX(0px) scaleX(-1)`;
             p.horseElement.style.opacity = '1';
-            // UPDATED: Remove the highlight class on new game
             p.horseElement.classList.remove('perfect-start-highlight');
             p.forceBarElement.style.height = '0%';
             p.position = 0;
@@ -285,19 +301,66 @@ document.addEventListener('DOMContentLoaded', () => {
             p.goKey1Pressed = false;
             p.goKey2Pressed = false;
         });
+        updateGameReadyState();
     }
 
-    function initGame() {
-        if (activePlayers.length === 0) return logMessage("⚠️ Add at least one player to start a game.");
-        if (audioContext && audioContext.state === 'suspended') audioContext.resume();
-        if (countdownInterval) clearInterval(countdownInterval);
+    function startRaceSequence() {
         prepareGameBoard();
         if (startMode !== 'disabled') {
             document.addEventListener('keydown', handlePreGameKeyDown);
             preGameListenersActive = true;
         }
-        updateGameReadyState();
         startCountdown(3, 'Get Ready...');
+    }
+    
+    function updatePreCountdownDisplay() {
+        clearTimeout(preCountdownTimeout);
+        const remaining = preCountdownEndTime - Date.now();
+
+        if (remaining <= 0) {
+            countdownDisplay.textContent = 'Starting...';
+            preCountdownEndTime = 0;
+            startRaceSequence();
+        } else {
+            countdownDisplay.textContent = `Next race in ${Math.ceil(remaining / 1000)}...`;
+            preCountdownTimeout = setTimeout(updatePreCountdownDisplay, 200);
+        }
+    }
+    
+    // NEW: Function to start the automatic 5-second countdown for a rematch.
+    function startAutomaticRematchCountdown() {
+        // Only start if the window is active
+        if(document.hidden) return; 
+
+        logMessage("⏱️ Next race starts automatically in 5 seconds... Press 'New Game' to start sooner.");
+        preCountdownEndTime = Date.now() + 5000;
+        updatePreCountdownDisplay();
+    }
+
+    function cancelPreCountdown() {
+        if (preCountdownEndTime > 0) {
+            resetAllTimersAndLoops();
+            logMessage("🚦 Automatic rematch cancelled.");
+            updateGameReadyState();
+        }
+    }
+    
+    // UPDATED: "New Game" is now a master reset/interrupt button.
+    function initGame() {
+        if (activePlayers.length === 0) {
+            logMessage("⚠️ Add at least one player to start a game.");
+            return;
+        }
+
+        // Interrupt everything currently happening.
+        resetAllTimersAndLoops(); 
+        logMessage("🔄 Game manually reset. Starting new race...");
+        logList.innerHTML = '<li>Game manually reset. Starting new race...</li>';
+
+        if (audioContext && audioContext.state === 'suspended') audioContext.resume();
+        
+        // Go directly to the race sequence.
+        startRaceSequence();
     }
     
     function startCountdown(duration, textPrefix) {
@@ -311,6 +374,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 playSound({ frequency: 330, duration: 0.15, type: 'sine' });
             } else {
                 clearInterval(countdownInterval);
+                countdownInterval = null;
                 document.removeEventListener('keydown', handlePreGameKeyDown);
                 countdownDisplay.textContent = 'GO!';
                 playSound({ frequency: 523, duration: 0.3, type: 'square' });
@@ -340,7 +404,6 @@ document.addEventListener('DOMContentLoaded', () => {
             if (p.startState === 'boosted') {
                 logMessage(`🚀 ${p.name} gets a PERFECT START!`);
                 playSound({ frequency: 660, duration: 0.2, type: 'triangle', volume: 0.2 });
-                // UPDATED: Add highlight class instead of direct style
                 p.horseElement.classList.add('perfect-start-highlight');
                 const boostPixels = p.horseElement.clientWidth * startBoostMultiplier;
                 p.position += boostPixels;
@@ -382,20 +445,30 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function checkWinCondition() {
+        if (!gameActive) return;
         if (activePlayers.length === 0) return;
         const trackWidth = raceTrack.querySelector('.lane').clientWidth - 60;
         const winner = activePlayers.find(p => p.position >= trackWidth);
         if (winner) endGame(winner);
     }
-
+    
+    // UPDATED: Triggers automatic rematch countdown.
     function endGame(winner) {
-        gameActive = false;
+        resetAllTimersAndLoops(); // Stop the game loop cleanly.
         logMessage(`📣🏆 Winner: ${winner.name}!`);
         winnerAnnEl.textContent = `${winner.name} Wins!`;
         winnerAnnEl.style.color = winner.color;
         winner.score++;
         updateScoreDisplay();
         updateGameReadyState();
+        
+        // Start the automatic rematch countdown after a short delay
+        setTimeout(() => {
+            // A safety check in case the user already pressed "New Game" manually
+            if (!gameActive && preCountdownEndTime === 0 && !countdownInterval) {
+                 startAutomaticRematchCountdown();
+            }
+        }, 3000); // 3-second delay to celebrate the win
     }
     
     // --- Input Handling ---
@@ -495,6 +568,7 @@ document.addEventListener('DOMContentLoaded', () => {
         playerToChangeKey = null;
     }
     function openModal(modal) {
+        cancelPreCountdown();
         modalOverlay.classList.remove('hidden');
         modal.classList.remove('hidden');
     }
@@ -583,6 +657,21 @@ document.addEventListener('DOMContentLoaded', () => {
     startModeSelect.addEventListener('change', handleManualControlChange);
     boostSlider.addEventListener('input', handleManualControlChange);
     falseStartPenaltySelect.addEventListener('change', handleManualControlChange);
+
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+            clearTimeout(preCountdownTimeout);
+        } else {
+            if (preCountdownEndTime > Date.now()) {
+                updatePreCountdownDisplay();
+            } else {
+                // If an automatic rematch was pending when the tab was hidden, trigger it now.
+                if (winnerAnnEl.textContent !== '' && !gameActive && preCountdownEndTime === 0 && !countdownInterval) {
+                    startAutomaticRematchCountdown();
+                }
+            }
+        }
+    });
 
     // --- Initializations ---
     function initializeDefaultPlayers() {
