@@ -197,8 +197,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
                 <div class="settings-group">
                     <label for="bot-cps-input-${playerData.id}">Clicks/Sec:</label>
-                    <input type="number" class="bot-cps-input" id="bot-cps-input-${playerData.id}" min="1" max="12" step="0.1" value="8.8">
-                    <input type="range" class="bot-cps-slider" min="1" max="12" step="0.1" value="8.8">
+                    <input type="number" class="bot-cps-input" id="bot-cps-input-${playerData.id}" min="1" max="20" step="0.1" value="8.8">
+                    <input type="range" class="bot-cps-slider" min="1" max="20" step="0.1" value="8.8">
                 </div>
                 <div class="settings-group">
                     <label>Perfect Start (<span class="perfect-start-chance-display">50</span>%):</label>
