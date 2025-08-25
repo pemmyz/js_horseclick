@@ -196,8 +196,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     </select>
                 </div>
                 <div class="settings-group">
-                    <label>Clicks/Sec (<span class="bot-cps-display">20</span>):</label>
-                    <input type="range" class="bot-cps-slider" min="1" max="60" value="20"> <!-- CHANGED: Max value is now 60 -->
+                    <label for="bot-cps-slider-${playerData.id}">Clicks/Sec:</label>
+                    <input type="range" class="bot-cps-slider" id="bot-cps-slider-${playerData.id}" min="1" max="12" step="0.1" value="8.8">
+                    <input type="number" class="bot-cps-input" min="1" max="12" step="0.1" value="8.8">
                 </div>
                 <div class="settings-group">
                     <label>Perfect Start (<span class="perfect-start-chance-display">50</span>%):</label>
@@ -240,7 +241,7 @@ document.addEventListener('DOMContentLoaded', () => {
             isBot: false,
             botSettings: {
                 mode: 'static',
-                cps: 20, 
+                cps: 8.8, 
                 perfectStartChance: 50,
             },
             keyConfigContainer: customizeSection.querySelector('.key-config-container'),
@@ -631,12 +632,6 @@ document.addEventListener('DOMContentLoaded', () => {
             updatePlayerBotStateUI(player);
         } else if (target.matches('.ai-mode-select')) {
             player.botSettings.mode = target.value;
-        } else if (target.matches('.bot-cps-slider')) {
-            player.botSettings.cps = parseInt(target.value);
-            player.customizeElement.querySelector('.bot-cps-display').textContent = target.value;
-        } else if (target.matches('.perfect-start-chance-slider')) {
-            player.botSettings.perfectStartChance = parseInt(target.value);
-            player.customizeElement.querySelector('.perfect-start-chance-display').textContent = target.value;
         }
     }
     function startKeyChange(button) {
@@ -745,7 +740,54 @@ document.addEventListener('DOMContentLoaded', () => {
     addPlayerButton.addEventListener('click', addPlayer);
     customizeToggleButton.addEventListener('click', openCustomizeModal);
     closeCustomizeModalButton.addEventListener('click', closeAllModals);
+    
+    // --- UPDATED MODAL EVENT HANDLING ---
+    // Handle clicks for buttons and checkboxes
     customizeModal.addEventListener('click', handleCustomizeInteraction);
+    // Handle live input from sliders
+    customizeModal.addEventListener('input', (e) => {
+        const target = e.target;
+        const playerSection = target.closest('.customize-player-section');
+        if (!playerSection) return;
+        const player = activePlayers.find(p => p.id === playerSection.dataset.playerId);
+        if (!player) return;
+
+        if (target.matches('.bot-cps-slider')) {
+            const newValue = parseFloat(target.value);
+            player.botSettings.cps = newValue;
+            const inputField = target.closest('.settings-group').querySelector('.bot-cps-input');
+            if (inputField) inputField.value = newValue.toFixed(1);
+        } else if (target.matches('.perfect-start-chance-slider')) {
+            player.botSettings.perfectStartChance = parseInt(target.value);
+            player.customizeElement.querySelector('.perfect-start-chance-display').textContent = target.value;
+        }
+    });
+    // Handle Enter key on number inputs
+    customizeModal.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter' || !e.target.matches('.bot-cps-input')) return;
+
+        e.preventDefault();
+        const target = e.target;
+        const playerSection = target.closest('.customize-player-section');
+        if (!playerSection) return;
+        const player = activePlayers.find(p => p.id === playerSection.dataset.playerId);
+        if (!player) return;
+        
+        let newValue = parseFloat(target.value);
+
+        // Clamp/validate the value
+        const min = parseFloat(target.min);
+        const max = parseFloat(target.max);
+        if (isNaN(newValue)) newValue = player.botSettings.cps; // Revert to old value if invalid
+        newValue = Math.max(min, Math.min(max, newValue));
+
+        player.botSettings.cps = newValue;
+        target.value = newValue.toFixed(1);
+
+        const slider = target.closest('.settings-group').querySelector('.bot-cps-slider');
+        if (slider) slider.value = newValue;
+    });
+
     closeHelpButton.addEventListener('click', closeAllModals);
     modalOverlay.addEventListener('click', closeAllModals);
     helpPrompt.addEventListener('click', toggleHelpModal);
