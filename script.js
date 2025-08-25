@@ -55,6 +55,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const vehicleOptions = ['🏇', '🏎', '🎠', '🏃‍♂️', '🚴‍♀️'];
     const PERFECT_START_WINDOW_MS = 250;
     const FALSE_START_STALL_MS = 1500;
+    const CPS_UPDATE_INTERVAL_MS = 500; // Update CPS display twice per second
 
     // --- Game State ---
     let drainRate, incrementPerTap;
@@ -162,7 +163,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const controlGroup = document.createElement('div');
         controlGroup.className = 'control-group';
         controlGroup.innerHTML = `
-            <span class="cps-display">CPS: 0</span>
+            <span class="cps-display">CPS: 0.0</span>
             <p class="score" id="${playerData.id}-score">Score: 0</p>
             <h3 style="color: ${playerData.color};">${playerData.name} (${playerData.keyDisplay})</h3>
             <div class="force-container">
@@ -338,7 +339,7 @@ document.addEventListener('DOMContentLoaded', () => {
             p.clicks = 0;
             p.lastCpsUpdateTime = 0;
             if (p.cpsDisplayElement) {
-                p.cpsDisplayElement.textContent = 'CPS: 0';
+                p.cpsDisplayElement.textContent = 'CPS: 0.0';
             }
         });
         updateGameReadyState();
@@ -498,15 +499,21 @@ document.addEventListener('DOMContentLoaded', () => {
         updateBots(deltaTime);
 
         activePlayers.forEach(p => {
-            // Calculate and display CPS for human players
+            // === MODIFIED CPS CALCULATION BLOCK START ===
             if (!p.isBot) {
                 if (!p.lastCpsUpdateTime) p.lastCpsUpdateTime = currentTime;
-                if (currentTime - p.lastCpsUpdateTime >= 1000) {
-                    p.cpsDisplayElement.textContent = `CPS: ${p.clicks}`;
+                
+                const timeSinceLastUpdate = currentTime - p.lastCpsUpdateTime;
+
+                if (timeSinceLastUpdate >= CPS_UPDATE_INTERVAL_MS) {
+                    const timeDeltaSeconds = timeSinceLastUpdate / 1000;
+                    const cps = (p.clicks / timeDeltaSeconds).toFixed(1);
+                    p.cpsDisplayElement.textContent = `CPS: ${cps}`;
                     p.clicks = 0;
                     p.lastCpsUpdateTime = currentTime;
                 }
             }
+            // === MODIFIED CPS CALCULATION BLOCK END ===
             
             if (p.force > 0) {
                 p.force -= drainRate;
