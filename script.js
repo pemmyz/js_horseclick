@@ -162,6 +162,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const controlGroup = document.createElement('div');
         controlGroup.className = 'control-group';
         controlGroup.innerHTML = `
+            <span class="cps-display">CPS: 0</span>
             <p class="score" id="${playerData.id}-score">Score: 0</p>
             <h3 style="color: ${playerData.color};">${playerData.name} (${playerData.keyDisplay})</h3>
             <div class="force-container">
@@ -228,6 +229,9 @@ document.addEventListener('DOMContentLoaded', () => {
             customizeElement: customizeSection,
             keyDisplayElement1: customizeSection.querySelector('[data-key-index="1"] .current-key-display'),
             keyDisplayElement2: customizeSection.querySelector('[data-key-index="2"] .current-key-display'),
+            cpsDisplayElement: controlGroup.querySelector('.cps-display'), // CPS display element
+            clicks: 0, // Clicks for CPS calculation
+            lastCpsUpdateTime: 0, // Timestamp for CPS calculation
             startState: 'waiting',
             isStalled: false,
             goKey1Pressed: false,
@@ -248,6 +252,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (playerObject.isBot || !gameActive || playerObject.isKeyDown || playerObject.isStalled) return;
             playerObject.isKeyDown = true;
             playerObject.force += incrementPerTap;
+            playerObject.clicks++; // Track click for CPS
             if (playerObject.force > 100) playerObject.force = 100;
         };
         const releaseAction = () => { playerObject.isKeyDown = false; };
@@ -329,6 +334,12 @@ document.addEventListener('DOMContentLoaded', () => {
             p.isStalled = false;
             p.goKey1Pressed = false;
             p.goKey2Pressed = false;
+            // Reset CPS data
+            p.clicks = 0;
+            p.lastCpsUpdateTime = 0;
+            if (p.cpsDisplayElement) {
+                p.cpsDisplayElement.textContent = 'CPS: 0';
+            }
         });
         updateGameReadyState();
     }
@@ -487,6 +498,16 @@ document.addEventListener('DOMContentLoaded', () => {
         updateBots(deltaTime);
 
         activePlayers.forEach(p => {
+            // Calculate and display CPS for human players
+            if (!p.isBot) {
+                if (!p.lastCpsUpdateTime) p.lastCpsUpdateTime = currentTime;
+                if (currentTime - p.lastCpsUpdateTime >= 1000) {
+                    p.cpsDisplayElement.textContent = `CPS: ${p.clicks}`;
+                    p.clicks = 0;
+                    p.lastCpsUpdateTime = currentTime;
+                }
+            }
+            
             if (p.force > 0) {
                 p.force -= drainRate;
                 if (p.force < 0) p.force = 0;
@@ -537,6 +558,7 @@ document.addEventListener('DOMContentLoaded', () => {
             e.preventDefault();
             player.isKeyDown = true;
             player.force += incrementPerTap;
+            player.clicks++; // Track click for CPS
             if (player.force > 100) player.force = 100;
         }
     }
@@ -576,6 +598,7 @@ document.addEventListener('DOMContentLoaded', () => {
         player.keyConfigContainer.classList.toggle('hidden', player.isBot);
         player.botSettingsContainer.classList.toggle('hidden', !player.isBot);
         player.controlsElement.classList.toggle('is-bot', player.isBot);
+        player.cpsDisplayElement.classList.toggle('hidden', player.isBot); // Hide/show CPS display
         if (player.isBot) {
             player.controlsTitleElement.textContent = `${player.name} (BOT)`;
         } else {
