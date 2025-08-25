@@ -196,9 +196,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     </select>
                 </div>
                 <div class="settings-group">
-                    <label for="bot-cps-slider-${playerData.id}">Clicks/Sec:</label>
-                    <input type="range" class="bot-cps-slider" id="bot-cps-slider-${playerData.id}" min="1" max="12" step="0.1" value="8.8">
-                    <input type="number" class="bot-cps-input" min="1" max="12" step="0.1" value="8.8">
+                    <label for="bot-cps-input-${playerData.id}">Clicks/Sec:</label>
+                    <input type="number" class="bot-cps-input" id="bot-cps-input-${playerData.id}" min="1" max="12" step="0.1" value="8.8">
+                    <input type="range" class="bot-cps-slider" min="1" max="12" step="0.1" value="8.8">
                 </div>
                 <div class="settings-group">
                     <label>Perfect Start (<span class="perfect-start-chance-display">50</span>%):</label>
@@ -751,42 +751,62 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!playerSection) return;
         const player = activePlayers.find(p => p.id === playerSection.dataset.playerId);
         if (!player) return;
+        
+        const parentGroup = target.closest('.settings-group');
+        if (!parentGroup) return;
 
         if (target.matches('.bot-cps-slider')) {
             const newValue = parseFloat(target.value);
             player.botSettings.cps = newValue;
-            const inputField = target.closest('.settings-group').querySelector('.bot-cps-input');
+            const inputField = parentGroup.querySelector('.bot-cps-input');
             if (inputField) inputField.value = newValue.toFixed(1);
+        } else if (target.matches('.bot-cps-input')) {
+            const newValue = parseFloat(target.value);
+            const slider = parentGroup.querySelector('.bot-cps-slider');
+            if (slider) slider.value = newValue;
+            // No need to set player.botSettings.cps here, will be done on keydown/blur
         } else if (target.matches('.perfect-start-chance-slider')) {
             player.botSettings.perfectStartChance = parseInt(target.value);
             player.customizeElement.querySelector('.perfect-start-chance-display').textContent = target.value;
         }
     });
-    // Handle Enter key on number inputs
-    customizeModal.addEventListener('keydown', (e) => {
-        if (e.key !== 'Enter' || !e.target.matches('.bot-cps-input')) return;
 
-        e.preventDefault();
-        const target = e.target;
-        const playerSection = target.closest('.customize-player-section');
+    // Function to validate and apply bot CPS value
+    function applyBotCpsValue(inputElement) {
+        const playerSection = inputElement.closest('.customize-player-section');
         if (!playerSection) return;
         const player = activePlayers.find(p => p.id === playerSection.dataset.playerId);
         if (!player) return;
         
-        let newValue = parseFloat(target.value);
+        let newValue = parseFloat(inputElement.value);
 
         // Clamp/validate the value
-        const min = parseFloat(target.min);
-        const max = parseFloat(target.max);
-        if (isNaN(newValue)) newValue = player.botSettings.cps; // Revert to old value if invalid
+        const min = parseFloat(inputElement.min);
+        const max = parseFloat(inputElement.max);
+        if (isNaN(newValue)) newValue = player.botSettings.cps; // Revert if invalid
         newValue = Math.max(min, Math.min(max, newValue));
 
         player.botSettings.cps = newValue;
-        target.value = newValue.toFixed(1);
+        inputElement.value = newValue.toFixed(1);
 
-        const slider = target.closest('.settings-group').querySelector('.bot-cps-slider');
+        const slider = inputElement.closest('.settings-group').querySelector('.bot-cps-slider');
         if (slider) slider.value = newValue;
+    }
+
+    // Handle Enter key or blur on number inputs
+    customizeModal.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && e.target.matches('.bot-cps-input')) {
+            e.preventDefault();
+            applyBotCpsValue(e.target);
+            e.target.blur(); // Remove focus
+        }
     });
+    customizeModal.addEventListener('focusout', (e) => {
+        if (e.target.matches('.bot-cps-input')) {
+            applyBotCpsValue(e.target);
+        }
+    });
+
 
     closeHelpButton.addEventListener('click', closeAllModals);
     modalOverlay.addEventListener('click', closeAllModals);
