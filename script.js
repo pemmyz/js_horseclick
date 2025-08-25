@@ -55,7 +55,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const vehicleOptions = ['🏇', '🏎', '🎠', '🏃‍♂️', '🚴‍♀️'];
     const PERFECT_START_WINDOW_MS = 250;
     const FALSE_START_STALL_MS = 1500;
-    
+
     // --- Game State ---
     let drainRate, incrementPerTap;
     let activePlayers = [];
@@ -64,7 +64,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentDifficulty = 'hard';
     let countdownInterval;
     let playerToChangeKey = null;
-    let keyToChangeIndex = 1; 
+    let keyToChangeIndex = 1;
     let startMode = 'single';
     let startBoostMultiplier = 1.0;
     let falseStartPenalty = 'stall';
@@ -172,21 +172,48 @@ document.addEventListener('DOMContentLoaded', () => {
         const customizeSection = document.createElement('div');
         customizeSection.className = 'customize-player-section';
         customizeSection.dataset.playerId = playerData.id;
+        // BOT: Added bot controls to the customize template
         customizeSection.innerHTML = `
-            <h4 style="color: ${playerData.color};">${playerData.name} Controls & Vehicle</h4>
+            <h4 style="color: ${playerData.color};">${playerData.name}</h4>
             <div class="vehicle-selector">
                 ${vehicleOptions.map(v => `<button class="vehicle-btn" data-vehicle="${v}">${v}</button>`).join('')}
             </div>
+
+            <div class="player-type-controls">
+                <label>
+                    <input type="checkbox" class="enable-bot-checkbox"> Enable Bot AI
+                </label>
+            </div>
+
+            <div class="bot-settings-container hidden">
+                <h4>Bot Settings</h4>
+                <div class="settings-group">
+                    <label for="ai-mode-select-${playerData.id}">AI Mode:</label>
+                    <select class="ai-mode-select" id="ai-mode-select-${playerData.id}">
+                        <option value="static">Static</option>
+                        <option value="rubberband">Rubberband</option>
+                    </select>
+                </div>
+                <div class="settings-group">
+                    <label>Difficulty (<span class="bot-speed-display">5</span>):</label>
+                    <input type="range" class="bot-speed-slider" min="1" max="10" value="5">
+                </div>
+                <div class="settings-group">
+                    <label>Perfect Start (<span class="perfect-start-chance-display">50</span>%):</label>
+                    <input type="range" class="perfect-start-chance-slider" min="0" max="100" value="50">
+                </div>
+            </div>
+
             <div class="key-config-container">
                 <div class="key-config-area" data-key-index="1">
                     <span class="key-label">Key 1:</span>
                     <div class="current-key-display">${playerData.keyDisplay}</div>
-                    <button class="change-key-btn" data-player-id="${playerData.id}" data-key-index="1">Change Key</button>
+                    <button class="change-key-btn" data-player-id="${playerData.id}" data-key-index="1">Change</button>
                 </div>
                 <div class="key-config-area" data-key-index="2">
                     <span class="key-label">Key 2:</span>
                     <div class="current-key-display">${playerData.key2Display}</div>
-                    <button class="change-key-btn" data-player-id="${playerData.id}" data-key-index="2">Change Key</button>
+                    <button class="change-key-btn" data-player-id="${playerData.id}" data-key-index="2">Change</button>
                 </div>
             </div>
         `;
@@ -206,12 +233,23 @@ document.addEventListener('DOMContentLoaded', () => {
             isStalled: false,
             goKey1Pressed: false,
             goKey2Pressed: false,
+            // BOT: Added bot properties to the player object
+            isBot: false,
+            botSettings: {
+                mode: 'static',
+                speed: 5, // 1-10
+                perfectStartChance: 50, // 0-100
+            },
+            timeSinceLastPress: 0, // for bot press timing
+            keyConfigContainer: customizeSection.querySelector('.key-config-container'),
+            botSettingsContainer: customizeSection.querySelector('.bot-settings-container'),
         };
         activePlayers.push(playerObject);
         updateKeyConfigVisibility();
         const pressAction = (e) => {
             e.preventDefault();
-            if (!gameActive || playerObject.isKeyDown || playerObject.isStalled) return;
+            // BOT: Prevent human interaction if player is a bot
+            if (playerObject.isBot || !gameActive || playerObject.isKeyDown || playerObject.isStalled) return;
             playerObject.isKeyDown = true;
             playerObject.force += incrementPerTap;
             if (playerObject.force > 100) playerObject.force = 100;
@@ -228,8 +266,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const numPlayers = activePlayers.length > 0 ? activePlayers.length : 1;
         controlsContainer.style.gridTemplateColumns = `repeat(${numPlayers}, 1fr)`;
     }
-    
-    // UPDATED: Simplified ready state. Button is only disabled if no players exist.
+
     function updateGameReadyState() {
         newGameButton.disabled = activePlayers.length === 0;
 
@@ -241,22 +278,18 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- Game Logic & Flow ---
-    
-    // NEW: Central function to cancel all ongoing game activities.
     function resetAllTimersAndLoops() {
-        gameActive = false; // This will stop the gameLoop from running
+        gameActive = false;
         clearTimeout(preCountdownTimeout);
         preCountdownTimeout = null;
         preCountdownEndTime = 0;
         clearInterval(countdownInterval);
         countdownInterval = null;
-        
-        // Clean up any lingering key listeners
         document.removeEventListener('keydown', handlePreGameKeyDown);
         document.removeEventListener('keydown', handleGoKeyDown);
         preGameListenersActive = false;
     }
-    
+
     function updateGameParameters() {
         if (currentDifficulty === 'manual') {
             incrementPerTap = parseInt(incrementSlider.value);
@@ -274,16 +307,16 @@ document.addEventListener('DOMContentLoaded', () => {
         startMode = startModeSelect.value;
         startBoostMultiplier = parseFloat(boostSlider.value) / 10;
         boostValueDisplay.textContent = startBoostMultiplier.toFixed(1);
-        
+
         falseStartPenalty = falseStartPenaltySelect.value;
 
         const startSystemDisabled = startMode === 'disabled';
         boostSliderGroup.classList.toggle('hidden', startSystemDisabled);
         falseStartPenaltyGroup.classList.toggle('hidden', startSystemDisabled);
-        
+
         updateKeyConfigVisibility();
     }
-    
+
     function prepareGameBoard() {
         updateGameParameters();
         winnerAnnEl.innerHTML = '';
@@ -300,6 +333,7 @@ document.addEventListener('DOMContentLoaded', () => {
             p.isStalled = false;
             p.goKey1Pressed = false;
             p.goKey2Pressed = false;
+            p.timeSinceLastPress = 0; // BOT: Reset bot timer
         });
         updateGameReadyState();
     }
@@ -312,7 +346,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         startCountdown(3, 'Get Ready...');
     }
-    
+
     function updatePreCountdownDisplay() {
         clearTimeout(preCountdownTimeout);
         const remaining = preCountdownEndTime - Date.now();
@@ -326,12 +360,9 @@ document.addEventListener('DOMContentLoaded', () => {
             preCountdownTimeout = setTimeout(updatePreCountdownDisplay, 200);
         }
     }
-    
-    // NEW: Function to start the automatic 5-second countdown for a rematch.
-    function startAutomaticRematchCountdown() {
-        // Only start if the window is active
-        if(document.hidden) return; 
 
+    function startAutomaticRematchCountdown() {
+        if(document.hidden) return;
         logMessage("⏱️ Next race starts automatically in 5 seconds... Press 'New Game' to start sooner.");
         preCountdownEndTime = Date.now() + 5000;
         updatePreCountdownDisplay();
@@ -344,25 +375,19 @@ document.addEventListener('DOMContentLoaded', () => {
             updateGameReadyState();
         }
     }
-    
-    // UPDATED: "New Game" is now a master reset/interrupt button.
+
     function initGame() {
         if (activePlayers.length === 0) {
             logMessage("⚠️ Add at least one player to start a game.");
             return;
         }
-
-        // Interrupt everything currently happening.
-        resetAllTimersAndLoops(); 
+        resetAllTimersAndLoops();
         logMessage("🔄 Game manually reset. Starting new race...");
         logList.innerHTML = '<li>Game manually reset. Starting new race...</li>';
-
         if (audioContext && audioContext.state === 'suspended') audioContext.resume();
-        
-        // Go directly to the race sequence.
         startRaceSequence();
     }
-    
+
     function startCountdown(duration, textPrefix) {
         let count = duration;
         countdownDisplay.textContent = `${textPrefix} ${count}`;
@@ -401,6 +426,12 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
         activePlayers.forEach(p => {
+            // BOT: Check if bot gets a perfect start
+            if (p.isBot && p.startState === 'waiting') {
+                if (Math.random() * 100 < p.botSettings.perfectStartChance) {
+                    p.startState = 'boosted';
+                }
+            }
             if (p.startState === 'boosted') {
                 logMessage(`🚀 ${p.name} gets a PERFECT START!`);
                 playSound({ frequency: 660, duration: 0.2, type: 'triangle', volume: 0.2 });
@@ -423,11 +454,49 @@ document.addEventListener('DOMContentLoaded', () => {
         requestAnimationFrame(gameLoop);
     }
 
+    // BOT: Function to handle all bot AI logic
+    function updateBots(deltaTime) {
+        let leadHumanPosition = -1;
+        const humanPlayers = activePlayers.filter(p => !p.isBot);
+        if (humanPlayers.length > 0) {
+            leadHumanPosition = Math.max(...humanPlayers.map(p => p.position));
+        }
+
+        activePlayers.forEach(bot => {
+            if (!bot.isBot || !gameActive || bot.isStalled) return;
+
+            // Base interval in seconds. Higher speed = shorter interval.
+            const baseInterval = (1500 - (bot.botSettings.speed * 100)) / 1000;
+            let finalInterval = baseInterval;
+
+            if (bot.botSettings.mode === 'rubberband' && leadHumanPosition !== -1) {
+                const trackWidth = raceTrack.querySelector('.lane').clientWidth - 60;
+                const distanceToLead = leadHumanPosition - bot.position;
+
+                // If bot is behind (distance > 0), factor < 1 (faster presses).
+                // If bot is ahead (distance < 0), factor > 1 (slower presses).
+                const adjustmentFactor = 1 - (distanceToLead / trackWidth) * 0.8;
+                finalInterval = baseInterval * Math.max(0.5, Math.min(2.5, adjustmentFactor));
+            }
+
+            bot.timeSinceLastPress += deltaTime;
+            if (bot.timeSinceLastPress >= finalInterval) {
+                bot.timeSinceLastPress = 0;
+                bot.force += incrementPerTap; // Simulate a press
+                if (bot.force > 100) bot.force = 100;
+            }
+        });
+    }
+
+
     function gameLoop(currentTime) {
         if (!gameActive) return;
         if (!lastTime) lastTime = currentTime;
         const deltaTime = (currentTime - lastTime) / 1000;
         lastTime = currentTime;
+
+        updateBots(deltaTime); // BOT: Update bot logic each frame
+
         activePlayers.forEach(p => {
             if (p.force > 0) {
                 p.force -= drainRate;
@@ -451,26 +520,22 @@ document.addEventListener('DOMContentLoaded', () => {
         const winner = activePlayers.find(p => p.position >= trackWidth);
         if (winner) endGame(winner);
     }
-    
-    // UPDATED: Triggers automatic rematch countdown.
+
     function endGame(winner) {
-        resetAllTimersAndLoops(); // Stop the game loop cleanly.
+        resetAllTimersAndLoops();
         logMessage(`📣🏆 Winner: ${winner.name}!`);
         winnerAnnEl.textContent = `${winner.name} Wins!`;
         winnerAnnEl.style.color = winner.color;
         winner.score++;
         updateScoreDisplay();
         updateGameReadyState();
-        
-        // Start the automatic rematch countdown after a short delay
         setTimeout(() => {
-            // A safety check in case the user already pressed "New Game" manually
             if (!gameActive && preCountdownEndTime === 0 && !countdownInterval) {
                  startAutomaticRematchCountdown();
             }
-        }, 3000); // 3-second delay to celebrate the win
+        }, 3000);
     }
-    
+
     // --- Input Handling ---
     function handleKeyDown(e) {
         if (playerToChangeKey) return;
@@ -478,7 +543,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.key === 'Escape') { closeAllModals(); return; }
         if (!gameActive) return;
         const key = e.key.toLowerCase();
-        const player = activePlayers.find(p => p.key === key);
+        // BOT: Find player and ensure it's not a bot
+        const player = activePlayers.find(p => !p.isBot && p.key === key);
         if (player && !player.isKeyDown && !player.isStalled) {
             e.preventDefault();
             player.isKeyDown = true;
@@ -489,12 +555,13 @@ document.addEventListener('DOMContentLoaded', () => {
     function handleKeyUp(e) {
         const key = e.key.toLowerCase();
         const player = activePlayers.find(p => p.key === key);
-        if (player) player.isKeyDown = false;
+        if (player && !player.isBot) player.isKeyDown = false;
     }
 
     function handlePreGameKeyDown(e) {
         const key = e.key.toLowerCase();
-        const player = activePlayers.find(p => p.key === key || p.key2 === key);
+        // BOT: Ensure player isn't a bot before processing false starts
+        const player = activePlayers.find(p => !p.isBot && (p.key === key || p.key2 === key));
         if (player && player.startState === 'waiting') {
             if (falseStartPenalty === 'stall') {
                 player.startState = 'false_start';
@@ -507,7 +574,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function handleGoKeyDown(e) {
         const key = e.key.toLowerCase();
-        const player = activePlayers.find(p => p.key === key || p.key2 === key);
+        // BOT: Ensure player isn't a bot
+        const player = activePlayers.find(p => !p.isBot && (p.key === key || p.key2 === key));
         if (!player || player.startState !== 'waiting') return;
         if (startMode === 'single' && key === player.key) {
             player.startState = 'boosted';
@@ -516,25 +584,52 @@ document.addEventListener('DOMContentLoaded', () => {
             if (key === player.key2) player.goKey2Pressed = true;
         }
     }
-    
+
     // --- UI & Modals ---
+
+    // BOT: Helper function to toggle UI elements when bot is enabled/disabled
+    function updatePlayerBotStateUI(player) {
+        player.keyConfigContainer.classList.toggle('hidden', player.isBot);
+        player.botSettingsContainer.classList.toggle('hidden', !player.isBot);
+        player.controlsElement.classList.toggle('is-bot', player.isBot);
+        if (player.isBot) {
+            player.controlsTitleElement.textContent = `${player.name} (BOT)`;
+        } else {
+            player.controlsTitleElement.textContent = `${player.name} (${player.keyDisplay})`;
+        }
+    }
+
     function handleCustomizeInteraction(e) {
-        const vehicleBtn = e.target.closest('.vehicle-btn');
-        const keyBtn = e.target.closest('.change-key-btn');
-        if (vehicleBtn) {
-            const player = activePlayers.find(p => p.id === vehicleBtn.closest('.customize-player-section').dataset.playerId);
-            if (player) {
-                player.sprite = vehicleBtn.dataset.vehicle;
-                player.horseElement.innerHTML = vehicleBtn.dataset.vehicle;
-            }
-        } else if (keyBtn && !playerToChangeKey) {
-            startKeyChange(keyBtn);
+        const target = e.target;
+        const playerSection = target.closest('.customize-player-section');
+        if (!playerSection) return;
+        const player = activePlayers.find(p => p.id === playerSection.dataset.playerId);
+        if (!player) return;
+
+        if (target.matches('.vehicle-btn')) {
+            player.sprite = target.dataset.vehicle;
+            player.horseElement.innerHTML = target.dataset.vehicle;
+        } else if (target.matches('.change-key-btn') && !playerToChangeKey) {
+            startKeyChange(target);
+        }
+        // BOT: Handle interactions with new bot controls
+        else if (target.matches('.enable-bot-checkbox')) {
+            player.isBot = target.checked;
+            updatePlayerBotStateUI(player);
+        } else if (target.matches('.ai-mode-select')) {
+            player.botSettings.mode = target.value;
+        } else if (target.matches('.bot-speed-slider')) {
+            player.botSettings.speed = parseInt(target.value);
+            player.customizeElement.querySelector('.bot-speed-display').textContent = target.value;
+        } else if (target.matches('.perfect-start-chance-slider')) {
+            player.botSettings.perfectStartChance = parseInt(target.value);
+            player.customizeElement.querySelector('.perfect-start-chance-display').textContent = target.value;
         }
     }
     function startKeyChange(button) {
         playerToChangeKey = activePlayers.find(p => p.id === button.dataset.playerId);
         keyToChangeIndex = parseInt(button.dataset.keyIndex);
-        button.textContent = 'Press any key...';
+        button.textContent = 'Press key...';
         button.classList.add('is-listening');
         document.addEventListener('keydown', handleKeySelection, { once: true });
     }
@@ -563,7 +658,7 @@ document.addEventListener('DOMContentLoaded', () => {
             playerToChangeKey.controlsTitleElement.textContent = `${playerToChangeKey.name} (${playerToChangeKey.keyDisplay})`;
         }
         const button = playerToChangeKey.customizeElement.querySelector(`.change-key-btn[data-key-index="${keyToChangeIndex}"]`);
-        button.textContent = 'Change Key';
+        button.textContent = 'Change';
         button.classList.remove('is-listening');
         playerToChangeKey = null;
     }
@@ -575,7 +670,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function closeAllModals() {
         if (playerToChangeKey) {
             const button = playerToChangeKey.customizeElement.querySelector('.is-listening');
-            if (button) { button.textContent = 'Change Key'; button.classList.remove('is-listening'); }
+            if (button) { button.textContent = 'Change'; button.classList.remove('is-listening'); }
             playerToChangeKey = null;
             document.removeEventListener('keydown', handleKeySelection);
         }
@@ -593,10 +688,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 activePlayers.forEach(p => {
                     const item = document.createElement('div');
                     item.className = 'help-control-item';
-                    let keysHTML = `<p>${p.name}: <span class="key">${p.keyDisplay}</span>`;
-                    if (startMode === 'two') {
-                        keysHTML += `<span class="key">${p.key2Display}</span></p>`;
+                    let keysHTML;
+                    if (p.isBot) {
+                        keysHTML = `<p>${p.name}: <span class="key">BOT</span></p>`;
                     } else {
+                        keysHTML = `<p>${p.name}: <span class="key">${p.keyDisplay}</span>`;
+                        if (startMode === 'two') {
+                           keysHTML += `<span class="key">${p.key2Display}</span>`;
+                        }
                         keysHTML += `</p>`;
                     }
                     item.innerHTML = keysHTML;
@@ -625,7 +724,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function updateScoreDisplay() {
         activePlayers.forEach(p => { p.scoreElement.textContent = `Score: ${p.score}`; });
     }
-    
+
     // --- Event Listeners ---
     document.addEventListener('keydown', handleKeyDown);
     document.addEventListener('keyup', handleKeyUp);
@@ -637,7 +736,7 @@ document.addEventListener('DOMContentLoaded', () => {
     closeHelpButton.addEventListener('click', closeAllModals);
     modalOverlay.addEventListener('click', closeAllModals);
     helpPrompt.addEventListener('click', toggleHelpModal);
-    
+
     difficultyRadios.forEach(radio => radio.addEventListener('change', (e) => {
         currentDifficulty = e.target.value;
         updateGameParameters();
@@ -651,7 +750,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         updateGameParameters();
     }
-    
+
     incrementSlider.addEventListener('input', handleManualControlChange);
     drainRateSlider.addEventListener('input', handleManualControlChange);
     startModeSelect.addEventListener('change', handleManualControlChange);
@@ -665,7 +764,6 @@ document.addEventListener('DOMContentLoaded', () => {
             if (preCountdownEndTime > Date.now()) {
                 updatePreCountdownDisplay();
             } else {
-                // If an automatic rematch was pending when the tab was hidden, trigger it now.
                 if (winnerAnnEl.textContent !== '' && !gameActive && preCountdownEndTime === 0 && !countdownInterval) {
                     startAutomaticRematchCountdown();
                 }
@@ -680,7 +778,7 @@ document.addEventListener('DOMContentLoaded', () => {
             createPlayer(availablePlayers[1]);
         }
     }
-    
+
     initAudio();
     volumeSlider.value = masterVolume;
     updateMuteButtonUI();
