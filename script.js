@@ -172,7 +172,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const customizeSection = document.createElement('div');
         customizeSection.className = 'customize-player-section';
         customizeSection.dataset.playerId = playerData.id;
-        // BOT: Added bot controls to the customize template
         customizeSection.innerHTML = `
             <h4 style="color: ${playerData.color};">${playerData.name}</h4>
             <div class="vehicle-selector">
@@ -195,8 +194,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     </select>
                 </div>
                 <div class="settings-group">
-                    <label>Difficulty (<span class="bot-speed-display">5</span>):</label>
-                    <input type="range" class="bot-speed-slider" min="1" max="10" value="5">
+                    <label>Clicks/Sec (<span class="bot-cps-display">20</span>):</label>
+                    <input type="range" class="bot-cps-slider" min="1" max="60" value="20"> <!-- CHANGED: Max value is now 60 -->
                 </div>
                 <div class="settings-group">
                     <label>Perfect Start (<span class="perfect-start-chance-display">50</span>%):</label>
@@ -233,14 +232,12 @@ document.addEventListener('DOMContentLoaded', () => {
             isStalled: false,
             goKey1Pressed: false,
             goKey2Pressed: false,
-            // BOT: Added bot properties to the player object
             isBot: false,
             botSettings: {
                 mode: 'static',
-                speed: 5, // 1-10
-                perfectStartChance: 50, // 0-100
+                cps: 20, 
+                perfectStartChance: 50,
             },
-            timeSinceLastPress: 0, // for bot press timing
             keyConfigContainer: customizeSection.querySelector('.key-config-container'),
             botSettingsContainer: customizeSection.querySelector('.bot-settings-container'),
         };
@@ -248,7 +245,6 @@ document.addEventListener('DOMContentLoaded', () => {
         updateKeyConfigVisibility();
         const pressAction = (e) => {
             e.preventDefault();
-            // BOT: Prevent human interaction if player is a bot
             if (playerObject.isBot || !gameActive || playerObject.isKeyDown || playerObject.isStalled) return;
             playerObject.isKeyDown = true;
             playerObject.force += incrementPerTap;
@@ -333,7 +329,6 @@ document.addEventListener('DOMContentLoaded', () => {
             p.isStalled = false;
             p.goKey1Pressed = false;
             p.goKey2Pressed = false;
-            p.timeSinceLastPress = 0; // BOT: Reset bot timer
         });
         updateGameReadyState();
     }
@@ -426,7 +421,6 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
         activePlayers.forEach(p => {
-            // BOT: Check if bot gets a perfect start
             if (p.isBot && p.startState === 'waiting') {
                 if (Math.random() * 100 < p.botSettings.perfectStartChance) {
                     p.startState = 'boosted';
@@ -454,7 +448,6 @@ document.addEventListener('DOMContentLoaded', () => {
         requestAnimationFrame(gameLoop);
     }
 
-    // BOT: Function to handle all bot AI logic
     function updateBots(deltaTime) {
         let leadHumanPosition = -1;
         const humanPlayers = activePlayers.filter(p => !p.isBot);
@@ -464,30 +457,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
         activePlayers.forEach(bot => {
             if (!bot.isBot || !gameActive || bot.isStalled) return;
-
-            // Base interval in seconds. Higher speed = shorter interval.
-            const baseInterval = (1500 - (bot.botSettings.speed * 100)) / 1000;
-            let finalInterval = baseInterval;
+            
+            const baseCPS = bot.botSettings.cps;
+            
+            let finalCPS = baseCPS;
 
             if (bot.botSettings.mode === 'rubberband' && leadHumanPosition !== -1) {
                 const trackWidth = raceTrack.querySelector('.lane').clientWidth - 60;
                 const distanceToLead = leadHumanPosition - bot.position;
 
-                // If bot is behind (distance > 0), factor < 1 (faster presses).
-                // If bot is ahead (distance < 0), factor > 1 (slower presses).
-                const adjustmentFactor = 1 - (distanceToLead / trackWidth) * 0.8;
-                finalInterval = baseInterval * Math.max(0.5, Math.min(2.5, adjustmentFactor));
+                const adjustmentMultiplier = 1 - (distanceToLead / trackWidth) * 0.8;
+                
+                finalCPS = baseCPS * Math.max(0.5, Math.min(1.5, adjustmentMultiplier));
             }
 
-            bot.timeSinceLastPress += deltaTime;
-            if (bot.timeSinceLastPress >= finalInterval) {
-                bot.timeSinceLastPress = 0;
-                bot.force += incrementPerTap; // Simulate a press
-                if (bot.force > 100) bot.force = 100;
-            }
+            const pressesThisFrame = finalCPS * deltaTime;
+
+            bot.force += pressesThisFrame * incrementPerTap;
+            if (bot.force > 100) bot.force = 100;
         });
     }
-
 
     function gameLoop(currentTime) {
         if (!gameActive) return;
@@ -495,7 +484,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const deltaTime = (currentTime - lastTime) / 1000;
         lastTime = currentTime;
 
-        updateBots(deltaTime); // BOT: Update bot logic each frame
+        updateBots(deltaTime);
 
         activePlayers.forEach(p => {
             if (p.force > 0) {
@@ -543,7 +532,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.key === 'Escape') { closeAllModals(); return; }
         if (!gameActive) return;
         const key = e.key.toLowerCase();
-        // BOT: Find player and ensure it's not a bot
         const player = activePlayers.find(p => !p.isBot && p.key === key);
         if (player && !player.isKeyDown && !player.isStalled) {
             e.preventDefault();
@@ -560,7 +548,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function handlePreGameKeyDown(e) {
         const key = e.key.toLowerCase();
-        // BOT: Ensure player isn't a bot before processing false starts
         const player = activePlayers.find(p => !p.isBot && (p.key === key || p.key2 === key));
         if (player && player.startState === 'waiting') {
             if (falseStartPenalty === 'stall') {
@@ -574,7 +561,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function handleGoKeyDown(e) {
         const key = e.key.toLowerCase();
-        // BOT: Ensure player isn't a bot
         const player = activePlayers.find(p => !p.isBot && (p.key === key || p.key2 === key));
         if (!player || player.startState !== 'waiting') return;
         if (startMode === 'single' && key === player.key) {
@@ -586,8 +572,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- UI & Modals ---
-
-    // BOT: Helper function to toggle UI elements when bot is enabled/disabled
     function updatePlayerBotStateUI(player) {
         player.keyConfigContainer.classList.toggle('hidden', player.isBot);
         player.botSettingsContainer.classList.toggle('hidden', !player.isBot);
@@ -612,15 +596,14 @@ document.addEventListener('DOMContentLoaded', () => {
         } else if (target.matches('.change-key-btn') && !playerToChangeKey) {
             startKeyChange(target);
         }
-        // BOT: Handle interactions with new bot controls
         else if (target.matches('.enable-bot-checkbox')) {
             player.isBot = target.checked;
             updatePlayerBotStateUI(player);
         } else if (target.matches('.ai-mode-select')) {
             player.botSettings.mode = target.value;
-        } else if (target.matches('.bot-speed-slider')) {
-            player.botSettings.speed = parseInt(target.value);
-            player.customizeElement.querySelector('.bot-speed-display').textContent = target.value;
+        } else if (target.matches('.bot-cps-slider')) {
+            player.botSettings.cps = parseInt(target.value);
+            player.customizeElement.querySelector('.bot-cps-display').textContent = target.value;
         } else if (target.matches('.perfect-start-chance-slider')) {
             player.botSettings.perfectStartChance = parseInt(target.value);
             player.customizeElement.querySelector('.perfect-start-chance-display').textContent = target.value;
