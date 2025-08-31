@@ -55,14 +55,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const vehicleOptions = ['🏇', '🏎', '🎠', '🏃‍♂️', '🚴‍♀️'];
     const PERFECT_START_WINDOW_MS = 250;
     const FALSE_START_STALL_MS = 1500;
-    const CPS_UPDATE_INTERVAL_MS = 500; // Update CPS display twice per second
+    const CPS_UPDATE_INTERVAL_MS = 500;
 
     // --- Game State ---
     let drainRate, incrementPerTap;
     let activePlayers = [];
     let gameActive = false;
     let lastTime = 0;
-    let goTime = 0; // NEW: Timestamp for when the race starts
+    let goTime = 0;
     let currentDifficulty = 'hard';
     let countdownInterval;
     let playerToChangeKey = null;
@@ -73,7 +73,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let preGameListenersActive = false;
     let preCountdownTimeout = null;
     let preCountdownEndTime = 0;
-
+    let gamepads = {};
 
     // --- Audio Functions ---
     function initAudio() {
@@ -229,50 +229,23 @@ document.addEventListener('DOMContentLoaded', () => {
             customizeElement: customizeSection,
             keyDisplayElement1: customizeSection.querySelector('[data-key-index="1"] .current-key-display'),
             keyDisplayElement2: customizeSection.querySelector('[data-key-index="2"] .current-key-display'),
-            cpsDisplayElement: controlGroup.querySelector('.cps-display'), // CPS display element
-            clicks: 0, // Clicks for short-term visual CPS calculation
-            lastCpsUpdateTime: 0, // Timestamp for CPS calculation
-            startState: 'waiting',
-            isStalled: false,
-            goKey1Pressed: false,
-            goKey2Pressed: false,
+            cpsDisplayElement: controlGroup.querySelector('.cps-display'),
+            clicks: 0, lastCpsUpdateTime: 0,
+            startState: 'waiting', isStalled: false,
+            goKey1Pressed: false, goKey2Pressed: false,
+            gamepadYPressedLastFrame: false,
             isBot: false,
-            botSettings: {
-                mode: 'static',
-                cps: 8.8, 
-                perfectStartChance: 50,
-            },
+            botSettings: { mode: 'static', cps: 8.8, perfectStartChance: 50 },
             keyConfigContainer: customizeSection.querySelector('.key-config-container'),
             botSettingsContainer: customizeSection.querySelector('.bot-settings-container'),
-            // NEW: STATS OBJECTS
-            raceStats: {
-                startTime: 0,
-                totalClicks: 0,
-                startReactionTime: -1, // -1: not recorded, -2: false start
-                forceSum: 0,
-                frameCount: 0
-            },
-            sessionStats: {
-                wins: 0,
-                racesPlayed: 0,
-                bestRaceTime: Infinity,
-                bestReactionTime: Infinity,
-                bestAvgCPS: 0,
-                winningStreak: 0,
-                longestWinningStreak: 0,
-                allReactionTimes: []
-            },
+            raceStats: { startTime: 0, totalClicks: 0, startReactionTime: -1, forceSum: 0, frameCount: 0 },
+            sessionStats: { wins: 0, racesPlayed: 0, bestRaceTime: Infinity, bestReactionTime: Infinity, bestAvgCPS: 0, winningStreak: 0, longestWinningStreak: 0, allReactionTimes: [] },
         };
         activePlayers.push(playerObject);
         updateKeyConfigVisibility();
         const pressAction = (e) => {
             e.preventDefault();
-            if (playerObject.isBot || !gameActive || playerObject.isKeyDown || playerObject.isStalled) return;
-            playerObject.isKeyDown = true;
-            playerObject.force += incrementPerTap;
-            playerObject.clicks++; // For visual CPS
-            playerObject.raceStats.totalClicks++; // For final stats
-            if (playerObject.force > 100) playerObject.force = 100;
+            triggerPlayerTap(playerObject);
         };
         const releaseAction = () => { playerObject.isKeyDown = false; };
         playerObject.controlsElement.addEventListener('mousedown', pressAction);
@@ -281,6 +254,14 @@ document.addEventListener('DOMContentLoaded', () => {
         playerObject.controlsElement.addEventListener('mouseleave', releaseAction);
         playerObject.controlsElement.addEventListener('touchend', releaseAction);
         laneContainer.querySelector('.remove-player-btn').addEventListener('click', () => removePlayer(playerData.id));
+    }
+    function triggerPlayerTap(player) {
+        if (player.isBot || !gameActive || player.isKeyDown || player.isStalled) return;
+        player.isKeyDown = true;
+        player.force += incrementPerTap;
+        player.clicks++;
+        player.raceStats.totalClicks++;
+        if (player.force > 100) player.force = 100;
     }
     function updateGridLayout() {
         const numPlayers = activePlayers.length > 0 ? activePlayers.length : 1;
@@ -357,14 +338,10 @@ document.addEventListener('DOMContentLoaded', () => {
             p.position = 0; p.force = 0;
             p.startState = 'waiting'; p.isStalled = false;
             p.goKey1Pressed = false; p.goKey2Pressed = false;
-            // Reset visual CPS data
+            p.gamepadYPressedLastFrame = false;
             p.clicks = 0; p.lastCpsUpdateTime = 0;
             if (p.cpsDisplayElement) p.cpsDisplayElement.textContent = 'CPS: 0.0';
-            // Reset race stats
-            p.raceStats = {
-                startTime: 0, totalClicks: 0, startReactionTime: -1,
-                forceSum: 0, frameCount: 0
-            };
+            p.raceStats = { startTime: 0, totalClicks: 0, startReactionTime: -1, forceSum: 0, frameCount: 0 };
         });
         updateGameReadyState();
     }
@@ -424,9 +401,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 clearInterval(countdownInterval);
                 countdownInterval = null;
                 document.removeEventListener('keydown', handlePreGameKeyDown);
+                preGameListenersActive = false;
                 countdownDisplay.textContent = 'GO!';
                 playSound({ frequency: 523, duration: 0.3, type: 'square' });
-                goTime = performance.now(); // Set the precise start time
+                goTime = performance.now();
                 if (startMode !== 'disabled') {
                     document.addEventListener('keydown', handleGoKeyDown);
                     setTimeout(() => {
@@ -440,7 +418,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 1000);
     }
     function startGame() {
-        preGameListenersActive = false;
         if (startMode === 'two') {
             activePlayers.forEach(p => {
                 if (p.startState === 'waiting' && p.goKey1Pressed && p.goKey2Pressed) {
@@ -500,10 +477,17 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
     function gameLoop(currentTime) {
-        if (!gameActive) return;
         if (!lastTime) lastTime = currentTime;
         const deltaTime = (currentTime - lastTime) / 1000;
         lastTime = currentTime;
+
+        handleGamepadInput(currentTime);
+
+        if (!gameActive) {
+             requestAnimationFrame(gameLoop);
+             return;
+        }
+
         updateBots(deltaTime);
         activePlayers.forEach(p => {
             if (!p.isBot) {
@@ -520,7 +504,8 @@ document.addEventListener('DOMContentLoaded', () => {
             p.raceStats.forceSum += p.force;
             p.raceStats.frameCount++;
             if (p.force > 0) {
-                p.force -= drainRate;
+                // ***** THE FIX IS HERE *****
+                p.force -= drainRate * (deltaTime * 60);
                 if (p.force < 0) p.force = 0;
             }
             if (!p.isStalled) {
@@ -545,7 +530,7 @@ document.addEventListener('DOMContentLoaded', () => {
         winnerAnnEl.textContent = `${winner.name} Wins!`;
         winnerAnnEl.style.color = winner.color;
         
-        logRaceStats(winner); // Log the detailed stats
+        logRaceStats(winner);
         
         updateWinsDisplay();
         updateGameReadyState();
@@ -559,25 +544,18 @@ document.addEventListener('DOMContentLoaded', () => {
     function logRaceStats(winner) {
         const endTime = performance.now();
         const raceDuration = goTime > 0 ? (endTime - goTime) / 1000 : 0;
-    
         let statsLogContent = `<strong>--- Race Over (Duration: ${raceDuration.toFixed(2)}s) ---</strong>\n`;
-    
         const rankedPlayers = [...activePlayers].sort((a, b) => b.position - a.position);
         const rankEmojis = ['🏆', '🥈', '🥉', '4️⃣'];
-    
         statsLogContent += `<strong>Rankings:</strong>\n`;
         rankedPlayers.forEach((p, index) => {
             statsLogContent += `${rankEmojis[index] || (index + 1) + '.'} ${p.name}\n`;
         });
-    
         statsLogContent += `\n<strong>=== Race Performance ===</strong>\n`;
-    
         rankedPlayers.forEach((p, index) => {
             const isWinner = p.id === winner.id;
             const avgCPS = raceDuration > 0.1 ? (p.raceStats.totalClicks / raceDuration).toFixed(1) : '0.0';
             const avgForce = p.raceStats.frameCount > 0 ? (p.raceStats.forceSum / p.raceStats.frameCount).toFixed(1) : '0.0';
-    
-            // Update session stats for all players
             p.sessionStats.racesPlayed++;
             if (isWinner) {
                 p.sessionStats.wins++;
@@ -588,7 +566,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 p.sessionStats.winningStreak = 0;
             }
             p.sessionStats.bestAvgCPS = Math.max(p.sessionStats.bestAvgCPS, parseFloat(avgCPS) || 0);
-    
             let reactionText;
             if (p.isBot) {
                 reactionText = 'N/A (Bot)';
@@ -601,21 +578,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 reactionText = `${reactionMs}ms`;
                 p.sessionStats.bestReactionTime = Math.min(p.sessionStats.bestReactionTime, p.raceStats.startReactionTime);
             }
-    
             statsLogContent += `\n<strong>${p.name} (#${index + 1}${isWinner ? ', WINNER' : ''})</strong>\n`;
             statsLogContent += `  - Avg CPS: ${avgCPS}\n`;
             statsLogContent += `  - Total Clicks: ${p.raceStats.totalClicks}\n`;
             statsLogContent += `  - Avg Force: ${avgForce}%\n`;
             statsLogContent += `  - Start Reaction: ${reactionText}\n`;
         });
-    
         statsLogContent += `\n<strong>=== Session Stats Summary ===</strong>\n`;
         activePlayers.forEach(p => {
             statsLogContent += `\n<strong>${p.name}</strong>\n`;
             statsLogContent += `  - Wins: ${p.sessionStats.wins} / ${p.sessionStats.racesPlayed} | Win Streak: ${p.sessionStats.winningStreak} (Best: ${p.sessionStats.longestWinningStreak})\n`;
             statsLogContent += `  - Best Race Time: ${p.sessionStats.bestRaceTime === Infinity ? 'N/A' : p.sessionStats.bestRaceTime.toFixed(2) + 's'}\n`;
             statsLogContent += `  - Best Avg CPS: ${p.sessionStats.bestAvgCPS.toFixed(1)}\n`;
-    
             if (!p.isBot && p.sessionStats.allReactionTimes.length > 0) {
                 const reactionStats = computeReactionStats(p.sessionStats.allReactionTimes);
                 if (reactionStats) {
@@ -623,12 +597,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
         });
-    
         const li = document.createElement('li');
         const pre = document.createElement('pre');
         pre.style.margin = '0';
         pre.style.whiteSpace = 'pre-wrap'; 
-        pre.style.fontFamily = 'inherit'; // Use the log's font
+        pre.style.fontFamily = 'inherit';
         pre.innerHTML = statsLogContent;
         li.appendChild(pre);
         logList.appendChild(li);
@@ -643,13 +616,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!gameActive) return;
         const key = e.key.toLowerCase();
         const player = activePlayers.find(p => !p.isBot && p.key === key);
-        if (player && !player.isKeyDown && !player.isStalled) {
+        if (player) {
             e.preventDefault();
-            player.isKeyDown = true;
-            player.force += incrementPerTap;
-            player.clicks++; // For visual CPS
-            player.raceStats.totalClicks++; // For final stats
-            if (player.force > 100) player.force = 100;
+            triggerPlayerTap(player);
         }
     }
     function handleKeyUp(e) {
@@ -663,7 +632,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (player && player.startState === 'waiting') {
             if (falseStartPenalty === 'stall') {
                 player.startState = 'false_start';
-                player.raceStats.startReactionTime = -2; // Mark as false start
+                player.raceStats.startReactionTime = -2;
                 logMessage(`💥 ${player.name} jumped the gun! (FALSE START)`);
                 playSound({ frequency: 220, duration: 0.3, type: 'sawtooth' });
                 player.horseElement.style.opacity = '0.4';
@@ -674,13 +643,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const key = e.key.toLowerCase();
         const player = activePlayers.find(p => !p.isBot && (p.key === key || p.key2 === key));
         if (!player || player.startState !== 'waiting') return;
-
-        if (player.raceStats.startReactionTime === -1) { // Only record first reaction
+        if (player.raceStats.startReactionTime === -1) {
             const reaction = performance.now() - goTime;
             player.raceStats.startReactionTime = reaction;
             player.sessionStats.allReactionTimes.push(reaction);
         }
-
         if (startMode === 'single' && key === player.key) {
             player.startState = 'boosted';
         } else if (startMode === 'two') {
@@ -688,13 +655,57 @@ document.addEventListener('DOMContentLoaded', () => {
             if (key === player.key2) player.goKey2Pressed = true;
         }
     }
+    
+    function handleGamepadInput(currentTime) {
+        const polledPads = navigator.getGamepads ? navigator.getGamepads() : [];
+        const Y_BUTTON_INDEX = 3;
+
+        activePlayers.forEach((player, i) => {
+            const pad = polledPads[i];
+            if (!pad || player.isBot) {
+                if (player) player.gamepadYPressedLastFrame = false;
+                return;
+            };
+
+            const yButtonPressed = pad.buttons[Y_BUTTON_INDEX] && pad.buttons[Y_BUTTON_INDEX].pressed;
+            
+            if (yButtonPressed && !player.gamepadYPressedLastFrame) {
+                if (preGameListenersActive && player.startState === 'waiting') {
+                    if (falseStartPenalty === 'stall') {
+                        player.startState = 'false_start';
+                        player.raceStats.startReactionTime = -2;
+                        logMessage(`💥 ${player.name} jumped the gun! (GAMEPAD FALSE START)`);
+                        playSound({ frequency: 220, duration: 0.3, type: 'sawtooth' });
+                        player.horseElement.style.opacity = '0.4';
+                    }
+                }
+                else if (goTime > 0 && currentTime - goTime < PERFECT_START_WINDOW_MS && player.startState === 'waiting') {
+                     if (player.raceStats.startReactionTime === -1) {
+                        const reaction = currentTime - goTime;
+                        player.raceStats.startReactionTime = reaction;
+                        player.sessionStats.allReactionTimes.push(reaction);
+                    }
+                    player.startState = 'boosted';
+                }
+                else if (gameActive) {
+                    triggerPlayerTap(player);
+                }
+            }
+
+            if (!yButtonPressed && player.gamepadYPressedLastFrame) {
+                player.isKeyDown = false;
+            }
+
+            player.gamepadYPressedLastFrame = yButtonPressed;
+        });
+    }
 
     // --- UI & Modals ---
     function updatePlayerBotStateUI(player) {
         player.keyConfigContainer.classList.toggle('hidden', player.isBot);
         player.botSettingsContainer.classList.toggle('hidden', !player.isBot);
         player.controlsElement.classList.toggle('is-bot', player.isBot);
-        player.cpsDisplayElement.classList.toggle('hidden', player.isBot); // Hide/show CPS display
+        player.cpsDisplayElement.classList.toggle('hidden', player.isBot);
         if (player.isBot) {
             player.controlsTitleElement.textContent = `${player.name} (BOT)`;
         } else {
@@ -784,11 +795,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (p.isBot) {
                         keysHTML = `<p>${p.name}: <span class="key">BOT</span></p>`;
                     } else {
-                        keysHTML = `<p>${p.name}: <span class="key">${p.keyDisplay}</span>`;
-                        if (startMode === 'two') {
-                           keysHTML += `<span class="key">${p.key2Display}</span>`;
-                        }
-                        keysHTML += `</p>`;
+                        let kbdKeys = `<span class="key">${p.keyDisplay}</span>`;
+                        if (startMode === 'two') { kbdKeys += `<span class="key">${p.key2Display}</span>`; }
+                        keysHTML = `<p>${p.name}: ${kbdKeys} or <span class="key">Gamepad Y</span></p>`;
                     }
                     item.innerHTML = keysHTML;
                     item.style.borderColor = p.color;
@@ -907,6 +916,15 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
     });
+    window.addEventListener("gamepadconnected", (e) => {
+        console.log(`Gamepad connected at index ${e.gamepad.index}: ${e.gamepad.id}.`);
+        gamepads[e.gamepad.index] = e.gamepad;
+    });
+    window.addEventListener("gamepaddisconnected", (e) => {
+        console.log(`Gamepad disconnected from index ${e.gamepad.index}: ${e.gamepad.id}.`);
+        delete gamepads[e.gamepad.index];
+    });
+
 
     // --- Initializations ---
     function initializeDefaultPlayers() {
@@ -924,4 +942,5 @@ document.addEventListener('DOMContentLoaded', () => {
     updateGridLayout();
     updateGameReadyState();
     logMessage("Welcome! Customize settings or click 'New Game' to begin.");
+    requestAnimationFrame(gameLoop);
 });

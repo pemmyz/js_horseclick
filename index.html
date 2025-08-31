@@ -6,7 +6,6 @@
     <title>Hevoskisat Clicker Challenge</title>
     <link rel="stylesheet" href="style.css">
     
-    <!-- ADD THIS LINE FOR THE FAVICON -->
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏇</text></svg>">
 </head>
 <body>
@@ -86,12 +85,12 @@
                     <label for="false-start-penalty-select">False Start Penalty: </label>
                     <select id="false-start-penalty-select">
                         <option value="stall" selected>Stall at Start</option>
-                        <option value="none">Disabled</option> <!-- UPDATED TEXT -->
+                        <option value="none">Disabled</option>
                     </select>
                 </div>
                 <div class="settings-group" id="boost-slider-group">
                     <label for="boost-slider">Start Boost (<span id="boost-value-display">1.0</span>x width): </label>
-                    <input type="range" id="boost-slider" min="5" max="20" value="10"> <!-- Maps to 0.5 - 2.0 -->
+                    <input type="range" id="boost-slider" min="5" max="20" value="10">
                 </div>
             </div>
         </div>
@@ -108,14 +107,14 @@
             <h3>Starting the Race</h3>
             <p>A good start is crucial! After the countdown, the "GO!" signal will appear.
                 <ul>
-                    <li><strong>Perfect Start:</strong> Press your key(s) right as "GO!" appears to get a starting boost and a special highlight for the race. The boost size can be changed in the advanced settings.</li>
-                    <li><strong>False Start:</strong> Pressing your key before "GO!" will cause you to stall for a moment after the race begins. Don't jump the gun! You can disable this penalty in the advanced settings.</li>
-                    <li><strong>Start Modes:</strong> You can choose between a classic single-button start or a more challenging two-button start in the advanced settings.</li>
+                    <li><strong>Perfect Start:</strong> Press your key(s) or Gamepad Y-Button right as "GO!" appears to get a starting boost.</li>
+                    <li><strong>False Start:</strong> Pressing your key or button before "GO!" will cause you to stall for a moment after the race begins.</li>
+                    <li><strong>Start Modes:</strong> You can choose between a single-button or two-button start for keyboard players in the advanced settings.</li>
                 </ul>
             </p>
 
             <h3>Gameplay</h3>
-            <p>Once the race is on, press your assigned key(s) as quickly as you can to build up force. The more force you have, the faster your vehicle will move. But be careful, your force drains over time, so you need to keep tapping!</p>
+            <p>Tap your assigned key(s), click your control area with the mouse, or tap the Y-Button on a gamepad to build force. The more force you have, the faster you move. But be careful, force drains over time!</p>
             <h3>Active Player Controls</h3>
             <div id="help-controls-list">
                 <!-- Player controls will be listed here by JS -->
