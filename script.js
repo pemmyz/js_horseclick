@@ -74,6 +74,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let preCountdownTimeout = null;
     let preCountdownEndTime = 0;
     let gamepads = {};
+    let assignedGamepadIndices = new Set(); // NEW: Tracks which gamepad indices are in use.
 
     // --- Audio Functions ---
     function initAudio() {
@@ -140,6 +141,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const playerIndex = activePlayers.findIndex(p => p.id === playerId);
         if (playerIndex > -1) {
             const player = activePlayers[playerIndex];
+
+            // NEW: Unassign gamepad if one was connected
+            if (player.gamepadIndex !== null) {
+                assignedGamepadIndices.delete(player.gamepadIndex);
+                logMessage(`🎮 Gamepad ${player.gamepadIndex} is now available.`);
+            }
+
             player.laneElement.remove();
             player.controlsElement.remove();
             player.customizeElement.remove();
@@ -166,7 +174,7 @@ document.addEventListener('DOMContentLoaded', () => {
         controlGroup.innerHTML = `
             <span class="cps-display">CPS: 0.0</span>
             <p class="wins" id="${playerData.id}-wins">Wins: 0</p>
-            <h3 style="color: ${playerData.color};">${playerData.name} (${playerData.keyDisplay})</h3>
+            <h3 style="color: ${playerData.color};"></h3>
             <div class="force-container">
                 <div id="${playerData.id}-force-bar" class="force-bar" style="background-color: ${playerData.color};"></div>
             </div>
@@ -233,15 +241,17 @@ document.addEventListener('DOMContentLoaded', () => {
             clicks: 0, lastCpsUpdateTime: 0,
             startState: 'waiting', isStalled: false,
             goKey1Pressed: false, goKey2Pressed: false,
-            gamepadButtonPressedLastFrame: false, // RENAMED for clarity
+            gamepadButtonPressedLastFrame: false,
             isBot: false,
             botSettings: { mode: 'static', cps: 8.8, perfectStartChance: 50 },
             keyConfigContainer: customizeSection.querySelector('.key-config-container'),
             botSettingsContainer: customizeSection.querySelector('.bot-settings-container'),
             raceStats: { startTime: 0, totalClicks: 0, startReactionTime: -1, forceSum: 0, frameCount: 0 },
             sessionStats: { wins: 0, racesPlayed: 0, bestRaceTime: Infinity, bestReactionTime: Infinity, bestAvgCPS: 0, winningStreak: 0, longestWinningStreak: 0, allReactionTimes: [] },
+            gamepadIndex: null, // NEW: To store assigned gamepad index
         };
         activePlayers.push(playerObject);
+        updatePlayerControlTitle(playerObject); // NEW: Centralized title update
         updateKeyConfigVisibility();
         const pressAction = (e) => {
             e.preventDefault();
@@ -504,7 +514,6 @@ document.addEventListener('DOMContentLoaded', () => {
             p.raceStats.forceSum += p.force;
             p.raceStats.frameCount++;
             if (p.force > 0) {
-                // BUG FIX: Scale drain by deltaTime to make it frame-rate independent.
                 p.force -= drainRate * (deltaTime * 60);
                 if (p.force < 0) p.force = 0;
             }
@@ -656,19 +665,48 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
+    // REWRITTEN Gamepad Handling
     function handleGamepadInput(currentTime) {
         const polledPads = navigator.getGamepads ? navigator.getGamepads() : [];
-        
-        activePlayers.forEach((player, i) => {
-            const pad = polledPads[i];
-            if (!pad || player.isBot) {
-                if (player) player.gamepadButtonPressedLastFrame = false;
-                return;
-            };
 
-            // FIX: Check all four face buttons (A, B, X, Y) for a press.
+        // --- Phase 1: Gamepad Assignment ---
+        // Look for presses on unassigned gamepads to connect them to players.
+        for (let i = 0; i < polledPads.length; i++) {
+            const pad = polledPads[i];
+            // Skip if no pad exists or if it's already assigned.
+            if (!pad || assignedGamepadIndices.has(i)) continue;
+
+            const anyFaceButtonPressed = pad.buttons[0]?.pressed || pad.buttons[1]?.pressed || pad.buttons[2]?.pressed || pad.buttons[3]?.pressed;
+
+            if (anyFaceButtonPressed) {
+                // Find the first human player who doesn't have a gamepad yet.
+                const playerToAssign = activePlayers.find(p => !p.isBot && p.gamepadIndex === null);
+
+                if (playerToAssign) {
+                    playerToAssign.gamepadIndex = i;
+                    assignedGamepadIndices.add(i);
+                    updatePlayerControlTitle(playerToAssign);
+                    logMessage(`🎮 Gamepad ${i} connected to ${playerToAssign.name}.`);
+                    // Ensure this first press is processed by setting the 'last frame' state to false.
+                    playerToAssign.gamepadButtonPressedLastFrame = false;
+                }
+            }
+        }
+        
+        // --- Phase 2: Gameplay Input ---
+        // Process inputs for all players who have an assigned gamepad.
+        activePlayers.forEach(player => {
+            if (player.isBot || player.gamepadIndex === null) {
+                player.gamepadButtonPressedLastFrame = false; // Reset state for players without a gamepad.
+                return;
+            }
+
+            const pad = polledPads[player.gamepadIndex];
+            if (!pad) return; // This can happen if the pad disconnects mid-frame.
+
             const anyFaceButtonPressed = pad.buttons[0]?.pressed || pad.buttons[1]?.pressed || pad.buttons[2]?.pressed || pad.buttons[3]?.pressed;
             
+            // Check for a new press (was not pressed last frame, is pressed now).
             if (anyFaceButtonPressed && !player.gamepadButtonPressedLastFrame) {
                 if (preGameListenersActive && player.startState === 'waiting') {
                     if (falseStartPenalty === 'stall') {
@@ -692,25 +730,31 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
 
+            // Handle button release.
             if (!anyFaceButtonPressed && player.gamepadButtonPressedLastFrame) {
                 player.isKeyDown = false;
             }
 
+            // Update state for the next frame.
             player.gamepadButtonPressedLastFrame = anyFaceButtonPressed;
         });
     }
 
     // --- UI & Modals ---
+    // NEW: Centralized function to update the player's title in the control box.
+    function updatePlayerControlTitle(player) {
+        if (!player || !player.controlsTitleElement) return;
+        const type = player.isBot ? '(BOT)' : `(${player.keyDisplay})`;
+        const gamepad = player.gamepadIndex !== null ? ` [GP ${player.gamepadIndex}]` : '';
+        player.controlsTitleElement.innerHTML = `${player.name} ${type}${gamepad}`;
+    }
+
     function updatePlayerBotStateUI(player) {
         player.keyConfigContainer.classList.toggle('hidden', player.isBot);
         player.botSettingsContainer.classList.toggle('hidden', !player.isBot);
         player.controlsElement.classList.toggle('is-bot', player.isBot);
         player.cpsDisplayElement.classList.toggle('hidden', player.isBot);
-        if (player.isBot) {
-            player.controlsTitleElement.textContent = `${player.name} (BOT)`;
-        } else {
-            player.controlsTitleElement.textContent = `${player.name} (${player.keyDisplay})`;
-        }
+        updatePlayerControlTitle(player); // Use centralized function
     }
     function handleCustomizeInteraction(e) {
         const target = e.target;
@@ -760,7 +804,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 playerToChangeKey.key2Display = newKeyDisplay;
                 playerToChangeKey.keyDisplayElement2.textContent = newKeyDisplay;
             }
-            playerToChangeKey.controlsTitleElement.textContent = `${playerToChangeKey.name} (${playerToChangeKey.keyDisplay})`;
+            updatePlayerControlTitle(playerToChangeKey); // Use centralized function
         }
         const button = playerToChangeKey.customizeElement.querySelector(`.change-key-btn[data-key-index="${keyToChangeIndex}"]`);
         button.textContent = 'Change';
@@ -797,7 +841,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     } else {
                         let kbdKeys = `<span class="key">${p.keyDisplay}</span>`;
                         if (startMode === 'two') { kbdKeys += `<span class="key">${p.key2Display}</span>`; }
-                        keysHTML = `<p>${p.name}: ${kbdKeys} or <span class="key">Gamepad Face Button</span></p>`;
+                        // NEW: Add gamepad connection status to help modal
+                        const gamepadInfo = p.gamepadIndex !== null ? ` (Connected to GP ${p.gamepadIndex})` : ` (or any Face Button on an available Gamepad)`;
+                        keysHTML = `<p>${p.name}: ${kbdKeys} or <span class="key">Gamepad</span>${gamepadInfo}</p>`;
                     }
                     item.innerHTML = keysHTML;
                     item.style.borderColor = p.color;
@@ -920,9 +966,20 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log(`Gamepad connected at index ${e.gamepad.index}: ${e.gamepad.id}.`);
         gamepads[e.gamepad.index] = e.gamepad;
     });
+    // UPDATED gamepad disconnect handler
     window.addEventListener("gamepaddisconnected", (e) => {
-        console.log(`Gamepad disconnected from index ${e.gamepad.index}: ${e.gamepad.id}.`);
-        delete gamepads[e.gamepad.index];
+        const disconnectedIndex = e.gamepad.index;
+        console.log(`Gamepad disconnected from index ${disconnectedIndex}: ${e.gamepad.id}.`);
+        delete gamepads[disconnectedIndex];
+
+        const player = activePlayers.find(p => p.gamepadIndex === disconnectedIndex);
+        if (player) {
+            logMessage(`🎮 Gamepad ${disconnectedIndex} disconnected from ${player.name}.`);
+            player.gamepadIndex = null;
+            player.gamepadButtonPressedLastFrame = false; // Reset state
+            updatePlayerControlTitle(player);
+        }
+        assignedGamepadIndices.delete(disconnectedIndex);
     });
 
 
@@ -941,6 +998,6 @@ document.addEventListener('DOMContentLoaded', () => {
     populatePlayerDropdown();
     updateGridLayout();
     updateGameReadyState();
-    logMessage("Welcome! Customize settings or click 'New Game' to begin.");
+    logMessage("Welcome! Press a face button on a controller to connect it to a player.");
     requestAnimationFrame(gameLoop);
 });
