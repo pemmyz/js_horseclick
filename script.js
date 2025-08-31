@@ -233,7 +233,7 @@ document.addEventListener('DOMContentLoaded', () => {
             clicks: 0, lastCpsUpdateTime: 0,
             startState: 'waiting', isStalled: false,
             goKey1Pressed: false, goKey2Pressed: false,
-            gamepadYPressedLastFrame: false,
+            gamepadButtonPressedLastFrame: false, // RENAMED for clarity
             isBot: false,
             botSettings: { mode: 'static', cps: 8.8, perfectStartChance: 50 },
             keyConfigContainer: customizeSection.querySelector('.key-config-container'),
@@ -338,7 +338,7 @@ document.addEventListener('DOMContentLoaded', () => {
             p.position = 0; p.force = 0;
             p.startState = 'waiting'; p.isStalled = false;
             p.goKey1Pressed = false; p.goKey2Pressed = false;
-            p.gamepadYPressedLastFrame = false;
+            p.gamepadButtonPressedLastFrame = false;
             p.clicks = 0; p.lastCpsUpdateTime = 0;
             if (p.cpsDisplayElement) p.cpsDisplayElement.textContent = 'CPS: 0.0';
             p.raceStats = { startTime: 0, totalClicks: 0, startReactionTime: -1, forceSum: 0, frameCount: 0 };
@@ -504,7 +504,7 @@ document.addEventListener('DOMContentLoaded', () => {
             p.raceStats.forceSum += p.force;
             p.raceStats.frameCount++;
             if (p.force > 0) {
-                // ***** THE FIX IS HERE *****
+                // BUG FIX: Scale drain by deltaTime to make it frame-rate independent.
                 p.force -= drainRate * (deltaTime * 60);
                 if (p.force < 0) p.force = 0;
             }
@@ -658,18 +658,18 @@ document.addEventListener('DOMContentLoaded', () => {
     
     function handleGamepadInput(currentTime) {
         const polledPads = navigator.getGamepads ? navigator.getGamepads() : [];
-        const Y_BUTTON_INDEX = 3;
-
+        
         activePlayers.forEach((player, i) => {
             const pad = polledPads[i];
             if (!pad || player.isBot) {
-                if (player) player.gamepadYPressedLastFrame = false;
+                if (player) player.gamepadButtonPressedLastFrame = false;
                 return;
             };
 
-            const yButtonPressed = pad.buttons[Y_BUTTON_INDEX] && pad.buttons[Y_BUTTON_INDEX].pressed;
+            // FIX: Check all four face buttons (A, B, X, Y) for a press.
+            const anyFaceButtonPressed = pad.buttons[0]?.pressed || pad.buttons[1]?.pressed || pad.buttons[2]?.pressed || pad.buttons[3]?.pressed;
             
-            if (yButtonPressed && !player.gamepadYPressedLastFrame) {
+            if (anyFaceButtonPressed && !player.gamepadButtonPressedLastFrame) {
                 if (preGameListenersActive && player.startState === 'waiting') {
                     if (falseStartPenalty === 'stall') {
                         player.startState = 'false_start';
@@ -692,11 +692,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
 
-            if (!yButtonPressed && player.gamepadYPressedLastFrame) {
+            if (!anyFaceButtonPressed && player.gamepadButtonPressedLastFrame) {
                 player.isKeyDown = false;
             }
 
-            player.gamepadYPressedLastFrame = yButtonPressed;
+            player.gamepadButtonPressedLastFrame = anyFaceButtonPressed;
         });
     }
 
@@ -797,7 +797,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     } else {
                         let kbdKeys = `<span class="key">${p.keyDisplay}</span>`;
                         if (startMode === 'two') { kbdKeys += `<span class="key">${p.key2Display}</span>`; }
-                        keysHTML = `<p>${p.name}: ${kbdKeys} or <span class="key">Gamepad Y</span></p>`;
+                        keysHTML = `<p>${p.name}: ${kbdKeys} or <span class="key">Gamepad Face Button</span></p>`;
                     }
                     item.innerHTML = keysHTML;
                     item.style.borderColor = p.color;
