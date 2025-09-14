@@ -7,7 +7,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const logList = document.getElementById('log-list');
     const logContainer = document.getElementById('log-container');
     const countdownDisplay = document.getElementById('countdown-display');
-    // --- [RESTORED] --- Manual add player elements
     const playerSelect = document.getElementById('player-select');
     const addPlayerButton = document.getElementById('add-player-button');
     const customizeToggleButton = document.getElementById('customize-toggle-button');
@@ -87,7 +86,7 @@ document.addEventListener('DOMContentLoaded', () => {
     muteButton.addEventListener('click', () => { isMuted = !isMuted; if (masterGainNode) masterGainNode.gain.setValueAtTime(isMuted ? 0 : masterVolume, audioContext.currentTime); updateMuteButtonUI(); });
 
 
-    // --- Player Management (Hybrid: Manual + Dynamic) ---
+    // --- [REWRITTEN] Player Management for Sequential Joining ---
     function populatePlayerDropdown() {
         playerSelect.innerHTML = '';
         const unselectedPlayers = availablePlayers.filter(ap => !activePlayers.some(p => p.id === ap.id));
@@ -100,65 +99,66 @@ document.addEventListener('DOMContentLoaded', () => {
         addPlayerButton.disabled = unselectedPlayers.length === 0 || activePlayers.length >= MAX_PLAYERS;
     }
 
-    function addPlayer() { // Manual Add
+    function addPlayer() { // Manual Add for AI/uncontrolled players
+        if (gameActive || activePlayers.length >= MAX_PLAYERS) return;
         if (playerSelect.value) {
             const playerData = availablePlayers.find(p => p.id === playerSelect.value);
             if (!playerData) return;
-            createPlayer(playerData);
-            logMessage(`👍 ${playerData.name} slot added manually. Configure in Customize menu.`);
-            // A manually added player starts as human but without assigned keys in the `assignedInputs` set
-            // They can be set to AI or a dynamic input can connect to them.
+            createPlayer(playerData, { controllerType: 'none' });
+            logMessage(`👍 ${playerData.name} slot added manually. Configure as AI or connect a gamepad.`);
             populatePlayerDropdown();
             updateGridLayout();
             updateGameReadyState();
         }
     }
 
-    function handleJoinAttempt(inputType, details) { // Dynamic Join
+    function handleJoinAttempt(inputType, details) {
         if (gameActive || activePlayers.length >= MAX_PLAYERS) return;
 
-        // Find the first available player configuration that is not currently in use
-        const playerData = availablePlayers.find(p => !activePlayers.some(ap => ap.id === p.id));
-        if (!playerData) {
-            logMessage("⚠️ No more player slots available.");
-            return;
+        let playerConfigToJoin;
+        
+        if (inputType === 'keyboard') {
+            const key = details.key;
+            // A key can only join if its own player slot is not taken. This prevents P2 keys controlling P1.
+            const configForKey = availablePlayers.find(p => p.key === key || p.key2 === key);
+            if (!configForKey || activePlayers.some(p => p.id === configForKey.id)) {
+                return;
+            }
+             // The player to join is always the next one in sequence.
+            playerConfigToJoin = availablePlayers[activePlayers.length];
+            if (!playerConfigToJoin || playerConfigToJoin.id !== configForKey.id) {
+                logMessage(`⚠️ Please join in order. Player ${activePlayers.length + 1} is next.`);
+                return;
+            }
+        } else { // gamepad
+            const playerToConnect = activePlayers.find(p => !p.isBot && p.controllerType === 'none');
+            if (playerToConnect) {
+                playerToConnect.gamepadIndex = details.index;
+                playerToConnect.controllerType = 'gamepad';
+                assignedInputs.add(`gamepad_${details.index}`);
+                logMessage(`🎮 Gamepad ${details.index} connected to ${playerToConnect.name}.`);
+                updatePlayerControlTitle(playerToConnect);
+                return;
+            }
+            playerConfigToJoin = availablePlayers[activePlayers.length];
         }
 
-        // Add the inputs to the assigned set BEFORE creating the player
-        if (inputType === 'keyboard') {
-            const inputKey = details.key;
-            // Find which player preset this key belongs to
-            const joiningPlayerConfig = availablePlayers.find(p => p.key === inputKey || p.key2 === inputKey);
-            // Check if that player slot is already taken
-            if (activePlayers.some(p => p.id === joiningPlayerConfig.id)) {
-                 logMessage(`⚠️ ${joiningPlayerConfig.name} is already in the game.`);
-                 return;
-            }
-            assignedInputs.add(`keyboard_${joiningPlayerConfig.key}`);
-            assignedInputs.add(`keyboard_${joiningPlayerConfig.key2}`);
-            createPlayer(joiningPlayerConfig);
-        } else if (inputType === 'gamepad') {
+        if (!playerConfigToJoin || activePlayers.some(p => p.id === playerConfigToJoin.id)) return;
+
+        let newPlayer;
+        if (inputType === 'gamepad') {
+            newPlayer = createPlayer(playerConfigToJoin, { controllerType: 'gamepad' });
+            newPlayer.gamepadIndex = details.index;
             assignedInputs.add(`gamepad_${details.index}`);
-            // Find first available human player WITHOUT a gamepad to connect to them
-            let playerToAssign = activePlayers.find(p => !p.isBot && p.gamepadIndex === null);
-            if(playerToAssign){
-                // Connect to existing player
-                playerToAssign.gamepadIndex = details.index;
-                updatePlayerControlTitle(playerToAssign);
-                logMessage(`🎮 Gamepad ${details.index} connected to ${playerToAssign.name}.`);
-                return;
-            } else {
-                 // No free human player, so create a new one
-                if (!playerData) return; // double check
-                createPlayer(playerData);
-                playerToAssign = activePlayers[activePlayers.length-1];
-                playerToAssign.gamepadIndex = details.index;
-                updatePlayerControlTitle(playerToAssign);
-            }
+        } else { // keyboard
+            newPlayer = createPlayer(playerConfigToJoin, { controllerType: 'keyboard' });
+            assignedInputs.add(`keyboard_${newPlayer.key}`);
+            assignedInputs.add(`keyboard_${newPlayer.key2}`);
         }
         
-        const newPlayer = activePlayers[activePlayers.length-1];
-        logMessage(`👍 ${newPlayer.name} has joined the game!`);
+        // This must be called *after* all properties are set.
+        updatePlayerControlTitle(newPlayer);
+        logMessage(`👍 ${newPlayer.name} has joined via ${inputType}!`);
         populatePlayerDropdown();
         updateGridLayout();
         updateGameReadyState();
@@ -169,7 +169,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (playerIndex > -1) {
             const player = activePlayers[playerIndex];
 
-            // Free up the controls associated with this player
             assignedInputs.delete(`keyboard_${player.key}`);
             assignedInputs.delete(`keyboard_${player.key2}`);
             if (player.gamepadIndex !== null) {
@@ -188,7 +187,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
-    function createPlayer(playerData) {
+    function createPlayer(playerData, options = {}) {
         const laneContainer = document.createElement('div');
         laneContainer.className = 'lane-container';
         laneContainer.innerHTML = `
@@ -280,9 +279,10 @@ document.addEventListener('DOMContentLoaded', () => {
             raceStats: { startTime: 0, totalClicks: 0, startReactionTime: -1, forceSum: 0, frameCount: 0 },
             sessionStats: { wins: 0, racesPlayed: 0, bestRaceTime: Infinity, bestReactionTime: Infinity, bestAvgCPS: 0, winningStreak: 0, longestWinningStreak: 0, allReactionTimes: [] },
             gamepadIndex: null,
+            controllerType: options.controllerType || 'none',
         };
         activePlayers.push(playerObject);
-        updatePlayerControlTitle(playerObject);
+        // Do not call updatePlayerControlTitle here; it will be called by the parent function
         updateKeyConfigVisibility();
         const pressAction = (e) => { e.preventDefault(); triggerPlayerTap(playerObject); };
         const releaseAction = () => { playerObject.isKeyDown = false; };
@@ -292,6 +292,7 @@ document.addEventListener('DOMContentLoaded', () => {
         playerObject.controlsElement.addEventListener('mouseleave', releaseAction);
         playerObject.controlsElement.addEventListener('touchend', releaseAction);
         laneContainer.querySelector('.remove-player-btn').addEventListener('click', () => removePlayer(playerData.id));
+        return playerObject;
     }
     
     function triggerPlayerTap(player) {
@@ -322,10 +323,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- Stats Helper ---
+    // --- Stats Helper (Unchanged) ---
     function computeReactionStats(reactionTimes) { if (reactionTimes.length === 0) return null; const fastest = Math.min(...reactionTimes); const slowest = Math.max(...reactionTimes); const average = reactionTimes.reduce((a, b) => a + b, 0) / reactionTimes.length; let stdev = 0; if (reactionTimes.length > 1) { const mean = average; const diffs = reactionTimes.map(rt => (rt - mean) ** 2); stdev = Math.sqrt(diffs.reduce((a, b) => a + b, 0) / (reactionTimes.length - 1)); } return { fastest, slowest, average, stdev }; }
     
-    // --- Game Logic & Flow ---
+    // --- Game Logic & Flow (Unchanged) ---
     function resetAllTimersAndLoops() { gameActive = false; clearTimeout(preCountdownTimeout); preCountdownTimeout = null; preCountdownEndTime = 0; clearInterval(countdownInterval); countdownInterval = null; document.removeEventListener('keydown', handlePreGameKeyDown); document.removeEventListener('keydown', handleGoKeyDown); preGameListenersActive = false; }
     function updateGameParameters() { if (currentDifficulty === 'manual') { incrementPerTap = parseInt(incrementSlider.value); drainRate = parseFloat(drainRateSlider.value) / 10; } else { const settings = difficultySettings[currentDifficulty]; incrementPerTap = settings.increment; drainRate = settings.drainRate; incrementSlider.value = incrementPerTap; drainRateSlider.value = settings.drainSlider; } incrementValueDisplay.textContent = incrementSlider.value; drainRateValueDisplay.textContent = (parseFloat(drainRateSlider.value) / 10).toFixed(1); startMode = startModeSelect.value; startBoostMultiplier = parseFloat(boostSlider.value) / 10; boostValueDisplay.textContent = startBoostMultiplier.toFixed(1); falseStartPenalty = falseStartPenaltySelect.value; const startSystemDisabled = startMode === 'disabled'; boostSliderGroup.classList.toggle('hidden', startSystemDisabled); falseStartPenaltyGroup.classList.toggle('hidden', startSystemDisabled); updateKeyConfigVisibility(); }
     function prepareGameBoard() { updateGameParameters(); winnerAnnEl.innerHTML = ''; winnerAnnEl.className = ''; activePlayers.forEach(p => { p.horseElement.innerHTML = p.sprite; p.horseElement.style.transform = `translateX(0px) scaleX(-1)`; p.horseElement.style.opacity = '1'; p.horseElement.classList.remove('perfect-start-highlight'); p.forceBarElement.style.height = '0%'; p.position = 0; p.force = 0; p.startState = 'waiting'; p.isStalled = false; p.goKey1Pressed = false; p.goKey2Pressed = false; p.gamepadButtonPressedLastFrame = false; p.clicks = 0; p.lastCpsUpdateTime = 0; if (p.cpsDisplayElement) p.cpsDisplayElement.textContent = 'CPS: 0.0'; p.raceStats = { startTime: 0, totalClicks: 0, startReactionTime: -1, forceSum: 0, frameCount: 0 }; }); updateGameReadyState(); }
@@ -349,27 +350,19 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.key === 'Escape') { closeAllModals(); return; }
         
         const key = e.key.toLowerCase();
-        const inputId = `keyboard_${key}`;
-
-        if (assignedInputs.has(inputId)) {
+        const player = activePlayers.find(p => !p.isBot && p.controllerType === 'keyboard' && (p.key === key || p.key2 === key));
+        
+        if (player) {
             if (!gameActive) return;
-            const player = activePlayers.find(p => !p.isBot && (p.key === key || p.key2 === key));
-            if (player) {
-                e.preventDefault();
-                triggerPlayerTap(player);
-            }
+            e.preventDefault();
+            triggerPlayerTap(player);
         } else {
-            if (gameActive || activePlayers.length >= MAX_PLAYERS) return;
-
-            const canJoinWithThisKey = availablePlayers.some(p => p.key === key || p.key2 === key);
-            if (canJoinWithThisKey) {
-                handleJoinAttempt('keyboard', { key });
-            }
+            handleJoinAttempt('keyboard', { key });
         }
     }
-    function handleKeyUp(e) { const key = e.key.toLowerCase(); const player = activePlayers.find(p => !p.isBot && (p.key === key || p.key2 === key)); if (player) player.isKeyDown = false; }
-    function handlePreGameKeyDown(e) { const key = e.key.toLowerCase(); const player = activePlayers.find(p => !p.isBot && (p.key === key || p.key2 === key)); if (player && player.startState === 'waiting') { if (falseStartPenalty === 'stall') { player.startState = 'false_start'; player.raceStats.startReactionTime = -2; logMessage(`💥 ${player.name} jumped the gun! (FALSE START)`); playSound({ frequency: 220, duration: 0.3, type: 'sawtooth' }); player.horseElement.style.opacity = '0.4'; } } }
-    function handleGoKeyDown(e) { const key = e.key.toLowerCase(); const player = activePlayers.find(p => !p.isBot && (p.key === key || p.key2 === key)); if (!player || player.startState !== 'waiting') return; if (player.raceStats.startReactionTime === -1) { const reaction = performance.now() - goTime; player.raceStats.startReactionTime = reaction; player.sessionStats.allReactionTimes.push(reaction); } if (startMode === 'single' && key === player.key) { player.startState = 'boosted'; } else if (startMode === 'two') { if (key === player.key) player.goKey1Pressed = true; if (key === player.key2) player.goKey2Pressed = true; } }
+    function handleKeyUp(e) { const key = e.key.toLowerCase(); const player = activePlayers.find(p => !p.isBot && p.controllerType === 'keyboard' && (p.key === key || p.key2 === key)); if (player) player.isKeyDown = false; }
+    function handlePreGameKeyDown(e) { const key = e.key.toLowerCase(); const player = activePlayers.find(p => !p.isBot && p.controllerType === 'keyboard' && (p.key === key || p.key2 === key)); if (player && player.startState === 'waiting') { if (falseStartPenalty === 'stall') { player.startState = 'false_start'; player.raceStats.startReactionTime = -2; logMessage(`💥 ${player.name} jumped the gun! (FALSE START)`); playSound({ frequency: 220, duration: 0.3, type: 'sawtooth' }); player.horseElement.style.opacity = '0.4'; } } }
+    function handleGoKeyDown(e) { const key = e.key.toLowerCase(); const player = activePlayers.find(p => !p.isBot && p.controllerType === 'keyboard' && (p.key === key || p.key2 === key)); if (!player || player.startState !== 'waiting') return; if (player.raceStats.startReactionTime === -1) { const reaction = performance.now() - goTime; player.raceStats.startReactionTime = reaction; player.sessionStats.allReactionTimes.push(reaction); } if (startMode === 'single' && key === player.key) { player.startState = 'boosted'; } else if (startMode === 'two') { if (key === player.key) player.goKey1Pressed = true; if (key === player.key2) player.goKey2Pressed = true; } }
     
     function handleGamepadInput(currentTime) {
         const polledPads = navigator.getGamepads ? navigator.getGamepads() : [];
@@ -384,7 +377,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (assignedInputs.has(inputId)) {
                 // Gamepad is ASSIGNED
                 const player = activePlayers.find(p => p.gamepadIndex === i);
-                if (!player) continue;
+                if (!player || player.isBot) continue;
 
                 if (anyFaceButtonPressed && !player.gamepadButtonPressedLastFrame) {
                     if (preGameListenersActive && player.startState === 'waiting') {
@@ -400,9 +393,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (!anyFaceButtonPressed && player.gamepadButtonPressedLastFrame) { player.isKeyDown = false; }
                 player.gamepadButtonPressedLastFrame = anyFaceButtonPressed;
             } else {
-                // Gamepad is UNASSIGNED, check for join/connect
-                if (gameActive || activePlayers.length >= MAX_PLAYERS) continue;
-
+                // Gamepad is UNASSIGNED
                 const wasPressedLastFrame = lastGamepadButtonStates[i] && (lastGamepadButtonStates[i][0] || lastGamepadButtonStates[i][1] || lastGamepadButtonStates[i][2] || lastGamepadButtonStates[i][3]);
                 if (anyFaceButtonPressed && !wasPressedLastFrame) {
                     handleJoinAttempt('gamepad', { index: i });
@@ -412,21 +403,53 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- UI & Modals ---
-    function updatePlayerControlTitle(player) { if (!player || !player.controlsTitleElement) return; const type = player.isBot ? '(BOT)' : `(${player.keyDisplay})`; const gamepad = player.gamepadIndex !== null ? ` [GP ${player.gamepadIndex}]` : ''; player.controlsTitleElement.innerHTML = `${player.name} ${type}${gamepad}`; }
-    function updatePlayerBotStateUI(player) { player.keyConfigContainer.classList.toggle('hidden', player.isBot); player.botSettingsContainer.classList.toggle('hidden', !player.isBot); player.controlsElement.classList.toggle('is-bot', player.isBot); player.cpsDisplayElement.classList.toggle('hidden', player.isBot); updatePlayerControlTitle(player); }
+    // --- [REWRITTEN] UI & Modals ---
+    function updatePlayerControlTitle(player) {
+        if (!player || !player.controlsTitleElement) return;
+
+        let controlInfo;
+        switch (player.controllerType) {
+            case 'keyboard':
+                controlInfo = `(${player.keyDisplay})`;
+                break;
+            case 'gamepad':
+                controlInfo = `(GP ${player.gamepadIndex})`;
+                break;
+            case 'bot':
+                controlInfo = '(BOT)';
+                break;
+            case 'none':
+            default:
+                controlInfo = '(No Controller)';
+                break;
+        }
+        player.controlsTitleElement.innerHTML = `${player.name} ${controlInfo}`;
+    }
+    
+    function updatePlayerBotStateUI(player) {
+        player.keyConfigContainer.classList.toggle('hidden', player.isBot || player.controllerType === 'gamepad');
+        player.botSettingsContainer.classList.toggle('hidden', !player.isBot);
+        player.controlsElement.classList.toggle('is-bot', player.isBot);
+        player.cpsDisplayElement.classList.toggle('hidden', player.isBot);
+        updatePlayerControlTitle(player);
+    }
+
     function handleCustomizeInteraction(e) {
         const target = e.target;
         const playerSection = target.closest('.customize-player-section');
         if (!playerSection) return;
         const player = activePlayers.find(p => p.id === playerSection.dataset.playerId);
         if (!player) return;
-        if (target.matches('.vehicle-btn')) { player.sprite = target.dataset.vehicle; player.horseElement.innerHTML = target.dataset.vehicle; } 
-        else if (target.matches('.change-key-btn') && !playerToChangeKey) { startKeyChange(target); } 
-        else if (target.matches('.enable-bot-checkbox')) {
+
+        if (target.matches('.vehicle-btn')) {
+            player.sprite = target.dataset.vehicle;
+            player.horseElement.innerHTML = target.dataset.vehicle;
+        } else if (target.matches('.change-key-btn') && !playerToChangeKey) {
+            startKeyChange(target);
+        } else if (target.matches('.enable-bot-checkbox')) {
             player.isBot = target.checked;
-            // When a player becomes a bot, free their controls.
             if (player.isBot) {
+                player.controllerType = 'bot';
                 assignedInputs.delete(`keyboard_${player.key}`);
                 assignedInputs.delete(`keyboard_${player.key2}`);
                 if (player.gamepadIndex !== null) {
@@ -434,9 +457,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     logMessage(`🎮 Gamepad ${player.gamepadIndex} freed from Bot ${player.name}.`);
                     player.gamepadIndex = null;
                 }
+            } else {
+                player.controllerType = 'none';
             }
             updatePlayerBotStateUI(player);
-        } else if (target.matches('.ai-mode-select')) { player.botSettings.mode = target.value; }
+        } else if (target.matches('.ai-mode-select')) {
+            player.botSettings.mode = target.value;
+        }
     }
     function startKeyChange(button) { playerToChangeKey = activePlayers.find(p => p.id === button.dataset.playerId); keyToChangeIndex = parseInt(button.dataset.keyIndex); button.textContent = 'Press key...'; button.classList.add('is-listening'); document.addEventListener('keydown', handleKeySelection, { once: true }); }
     function getKeyDisplay(e) { if (e.key === ' ') return 'Space'; if (e.key.includes('Arrow')) return e.key.replace('Arrow', '') + ' Arrow'; return e.key.length === 1 ? e.key.toUpperCase() : e.key; }
@@ -444,7 +471,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function openModal(modal) { cancelPreCountdown(); modalOverlay.classList.remove('hidden'); modal.classList.remove('hidden'); }
     function closeAllModals() { if (playerToChangeKey) { const button = playerToChangeKey.customizeElement.querySelector('.is-listening'); if (button) { button.textContent = 'Change'; button.classList.remove('is-listening'); } playerToChangeKey = null; document.removeEventListener('keydown', handleKeySelection); } modalOverlay.classList.add('hidden'); customizeModal.classList.add('hidden'); helpModal.classList.add('hidden'); }
     function openCustomizeModal() { openModal(customizeModal); }
-    function toggleHelpModal() { if (helpModal.classList.contains('hidden')) { helpControlsList.innerHTML = ''; if (activePlayers.length > 0) { activePlayers.forEach(p => { const item = document.createElement('div'); item.className = 'help-control-item'; let keysHTML; if (p.isBot) { keysHTML = `<p>${p.name}: <span class="key">BOT</span></p>`; } else { let kbdKeys = `<span class="key">${p.keyDisplay}</span>`; if (startMode === 'two') { kbdKeys += `<span class="key">${p.key2Display}</span>`; } const gamepadInfo = p.gamepadIndex !== null ? ` (Connected to GP ${p.gamepadIndex})` : ``; keysHTML = `<p>${p.name}: ${kbdKeys} or <span class="key">Gamepad</span>${gamepadInfo}</p>`; } item.innerHTML = keysHTML; item.style.borderColor = p.color; helpControlsList.appendChild(item); }); } else { helpControlsList.innerHTML = '<p>No players have been added yet.</p>'; } openModal(helpModal); } else { closeAllModals(); } }
+    function toggleHelpModal() { if (helpModal.classList.contains('hidden')) { helpControlsList.innerHTML = ''; if (activePlayers.length > 0) { activePlayers.forEach(p => { const item = document.createElement('div'); item.className = 'help-control-item'; let controlText; switch(p.controllerType) { case 'keyboard': controlText = `<span class="key">${p.keyDisplay}</span>`; if (startMode === 'two') { controlText += ` & <span class="key">${p.key2Display}</span>`; } break; case 'gamepad': controlText = `<span class="key">GP ${p.gamepadIndex}</span>`; break; case 'bot': controlText = `<span class="key">BOT</span>`; break; default: controlText = `<span class="key">Not Connected</span>`; break; } item.innerHTML = `<p>${p.name}: ${controlText}</p>`; item.style.borderColor = p.color; helpControlsList.appendChild(item); }); } else { helpControlsList.innerHTML = '<p>No players have been added yet.</p>'; } openModal(helpModal); } else { closeAllModals(); } }
     function updateKeyConfigVisibility() { document.querySelectorAll('.key-config-area[data-key-index="2"]').forEach(el => { el.classList.toggle('hidden', startMode !== 'two'); }); }
     function logMessage(message) { const li = document.createElement('li'); li.textContent = message; logList.appendChild(li); logContainer.scrollTop = logContainer.scrollHeight; }
     function updateWinsDisplay() { activePlayers.forEach(p => { p.winsElement.textContent = `Wins: ${p.sessionStats.wins}`; }); }
@@ -453,7 +480,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.addEventListener('keydown', handleKeyDown);
     document.addEventListener('keyup', handleKeyUp);
     newGameButton.addEventListener('click', initGame);
-    addPlayerButton.addEventListener('click', addPlayer); // RESTORED
+    addPlayerButton.addEventListener('click', addPlayer);
     customizeToggleButton.addEventListener('click', openCustomizeModal);
     closeCustomizeModalButton.addEventListener('click', closeAllModals);
     customizeModal.addEventListener('click', handleCustomizeInteraction);
@@ -471,14 +498,19 @@ document.addEventListener('DOMContentLoaded', () => {
     startModeSelect.addEventListener('change', handleManualControlChange);
     boostSlider.addEventListener('input', handleManualControlChange);
     falseStartPenaltySelect.addEventListener('change', handleManualControlChange);
-    document.addEventListener('visibilitychange', () => { if (document.hidden) { clearTimeout(preCountdownTimeout); } else { if (preCountdownEndTime > Date.now()) { updatePreCountdownDisplay(); } else { if (winnerAnnEl.textContent !== '' && !gameActive && preCountdownEndTime === 0 && !countdownInterval) { startAutomaticRematchCountdown(); } } } });
     window.addEventListener("gamepadconnected", (e) => { console.log(`Gamepad connected at index ${e.gamepad.index}: ${e.gamepad.id}.`); gamepads[e.gamepad.index] = e.gamepad; });
     window.addEventListener("gamepaddisconnected", (e) => {
         const disconnectedIndex = e.gamepad.index;
         console.log(`Gamepad disconnected from index ${disconnectedIndex}: ${e.gamepad.id}.`);
         delete gamepads[disconnectedIndex];
         const player = activePlayers.find(p => p.gamepadIndex === disconnectedIndex);
-        if (player) { logMessage(`🎮 Gamepad ${disconnectedIndex} disconnected from ${player.name}.`); player.gamepadIndex = null; player.gamepadButtonPressedLastFrame = false; updatePlayerControlTitle(player); }
+        if (player) {
+            logMessage(`🎮 Gamepad ${disconnectedIndex} disconnected from ${player.name}. Player is now uncontrolled.`);
+            player.gamepadIndex = null;
+            player.controllerType = 'none';
+            player.gamepadButtonPressedLastFrame = false;
+            updatePlayerControlTitle(player);
+        }
         assignedInputs.delete(`gamepad_${disconnectedIndex}`);
     });
 
@@ -487,7 +519,7 @@ document.addEventListener('DOMContentLoaded', () => {
     volumeSlider.value = masterVolume;
     updateMuteButtonUI();
     updateGameParameters();
-    populatePlayerDropdown(); // Call this on startup
+    populatePlayerDropdown();
     updateGridLayout();
     updateGameReadyState();
     logMessage("Welcome! Add players manually or press a key/gamepad button to join.");
