@@ -57,6 +57,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const PERFECT_START_WINDOW_MS = 250;
     const FALSE_START_STALL_MS = 1500;
     const CPS_UPDATE_INTERVAL_MS = 500;
+    const AUTO_START_DELAY_MS = 5000;
 
     // --- Game State ---
     let drainRate, incrementPerTap;
@@ -77,6 +78,10 @@ document.addEventListener('DOMContentLoaded', () => {
     let gamepads = {};
     let assignedInputs = new Set();
     let lastGamepadButtonStates = {};
+    let autoStartCountdownId = null;
+    let autoStartUpdateIntervalId = null;
+    let autoStartEndTime = 0;
+
 
     // --- Audio Functions ---
     function initAudio() { try { if (!audioContext) { audioContext = new (window.AudioContext || window.webkitAudioContext)(); masterGainNode = audioContext.createGain(); masterGainNode.connect(audioContext.destination); masterGainNode.gain.setValueAtTime(masterVolume, audioContext.currentTime); } } catch (e) { console.warn("Web Audio API is not supported."); document.getElementById('audio-controls').style.display = 'none'; } }
@@ -85,8 +90,45 @@ document.addEventListener('DOMContentLoaded', () => {
     volumeSlider.addEventListener('input', (e) => { masterVolume = parseFloat(e.target.value); if (masterGainNode) masterGainNode.gain.setValueAtTime(masterVolume, audioContext.currentTime); isMuted = false; updateMuteButtonUI(); });
     muteButton.addEventListener('click', () => { isMuted = !isMuted; if (masterGainNode) masterGainNode.gain.setValueAtTime(isMuted ? 0 : masterVolume, audioContext.currentTime); updateMuteButtonUI(); });
 
+    
+    // --- Auto-start Countdown Logic ---
+    function cancelAutoCountdown() {
+        if (autoStartCountdownId) {
+            clearTimeout(autoStartCountdownId);
+            clearInterval(autoStartUpdateIntervalId);
+            autoStartCountdownId = null;
+            autoStartUpdateIntervalId = null;
+            autoStartEndTime = 0;
+            logMessage("⏱️ Automatic start cancelled.");
+            updateGameReadyState();
+        }
+    }
 
-    // --- [REWRITTEN] Player Management for Sequential Joining ---
+    function updateAutoCountdownDisplay() {
+        if (!autoStartEndTime) return;
+        const remainingSeconds = Math.ceil((autoStartEndTime - Date.now()) / 1000);
+        if (remainingSeconds > 0) {
+            countdownDisplay.classList.remove('message-mode'); // [FIX] Use number styling
+            countdownDisplay.textContent = `Game starting in ${remainingSeconds}...`;
+        }
+    }
+
+    function startOrResetAutoCountdown() {
+        cancelAutoCountdown();
+
+        if (gameActive || activePlayers.length < 2) {
+            if (!gameActive) updateGameReadyState(); // Update text if count drops below 2
+            return;
+        }
+
+        logMessage(`⏱️ Game will start in ${AUTO_START_DELAY_MS / 1000} seconds... New players can still join!`);
+        autoStartEndTime = Date.now() + AUTO_START_DELAY_MS;
+        autoStartCountdownId = setTimeout(initGame, AUTO_START_DELAY_MS);
+        autoStartUpdateIntervalId = setInterval(updateAutoCountdownDisplay, 200);
+        updateAutoCountdownDisplay();
+    }
+
+    // --- Player Management ---
     function populatePlayerDropdown() {
         playerSelect.innerHTML = '';
         const unselectedPlayers = availablePlayers.filter(ap => !activePlayers.some(p => p.id === ap.id));
@@ -99,7 +141,7 @@ document.addEventListener('DOMContentLoaded', () => {
         addPlayerButton.disabled = unselectedPlayers.length === 0 || activePlayers.length >= MAX_PLAYERS;
     }
 
-    function addPlayer() { // Manual Add for AI/uncontrolled players
+    function addPlayer() {
         if (gameActive || activePlayers.length >= MAX_PLAYERS) return;
         if (playerSelect.value) {
             const playerData = availablePlayers.find(p => p.id === playerSelect.value);
@@ -108,27 +150,23 @@ document.addEventListener('DOMContentLoaded', () => {
             logMessage(`👍 ${playerData.name} slot added manually. Configure as AI or connect a gamepad.`);
             populatePlayerDropdown();
             updateGridLayout();
-            updateGameReadyState();
+            startOrResetAutoCountdown();
         }
     }
 
     function handleJoinAttempt(inputType, details) {
         if (gameActive || activePlayers.length >= MAX_PLAYERS) return;
-
+        
         let playerConfigToJoin;
         
         if (inputType === 'keyboard') {
             const key = details.key;
-            // A key can only join if its own player slot is not taken. This prevents P2 keys controlling P1.
             const configForKey = availablePlayers.find(p => p.key === key || p.key2 === key);
-            if (!configForKey || activePlayers.some(p => p.id === configForKey.id)) {
-                return;
-            }
-             // The player to join is always the next one in sequence.
+            if (!configForKey || activePlayers.some(p => p.id === configForKey.id)) return;
             playerConfigToJoin = availablePlayers[activePlayers.length];
             if (!playerConfigToJoin || playerConfigToJoin.id !== configForKey.id) {
-                logMessage(`⚠️ Please join in order. Player ${activePlayers.length + 1} is next.`);
-                return;
+                 logMessage(`⚠️ Please join in order. Player ${activePlayers.length + 1} is next.`);
+                 return;
             }
         } else { // gamepad
             const playerToConnect = activePlayers.find(p => !p.isBot && p.controllerType === 'none');
@@ -138,6 +176,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 assignedInputs.add(`gamepad_${details.index}`);
                 logMessage(`🎮 Gamepad ${details.index} connected to ${playerToConnect.name}.`);
                 updatePlayerControlTitle(playerToConnect);
+                startOrResetAutoCountdown();
                 return;
             }
             playerConfigToJoin = availablePlayers[activePlayers.length];
@@ -150,18 +189,17 @@ document.addEventListener('DOMContentLoaded', () => {
             newPlayer = createPlayer(playerConfigToJoin, { controllerType: 'gamepad' });
             newPlayer.gamepadIndex = details.index;
             assignedInputs.add(`gamepad_${details.index}`);
-        } else { // keyboard
+        } else {
             newPlayer = createPlayer(playerConfigToJoin, { controllerType: 'keyboard' });
             assignedInputs.add(`keyboard_${newPlayer.key}`);
             assignedInputs.add(`keyboard_${newPlayer.key2}`);
         }
         
-        // This must be called *after* all properties are set.
         updatePlayerControlTitle(newPlayer);
         logMessage(`👍 ${newPlayer.name} has joined via ${inputType}!`);
         populatePlayerDropdown();
         updateGridLayout();
-        updateGameReadyState();
+        startOrResetAutoCountdown();
     }
     
     function removePlayer(playerId) {
@@ -183,7 +221,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             populatePlayerDropdown();
             updateGridLayout();
-            updateGameReadyState();
+            startOrResetAutoCountdown();
         }
     }
     
@@ -282,7 +320,7 @@ document.addEventListener('DOMContentLoaded', () => {
             controllerType: options.controllerType || 'none',
         };
         activePlayers.push(playerObject);
-        // Do not call updatePlayerControlTitle here; it will be called by the parent function
+        updatePlayerControlTitle(playerObject);
         updateKeyConfigVisibility();
         const pressAction = (e) => { e.preventDefault(); triggerPlayerTap(playerObject); };
         const releaseAction = () => { playerObject.isKeyDown = false; };
@@ -310,7 +348,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function updateGameReadyState() {
-        if (gameActive || preCountdownEndTime > 0 || countdownInterval) return;
+        if (autoStartCountdownId || gameActive || preCountdownEndTime > 0 || countdownInterval) return;
+        
+        countdownDisplay.classList.add('message-mode'); // [FIX] Use message styling
         if (activePlayers.length === 0) {
             countdownDisplay.textContent = 'Add a player or press a key to Join!';
             newGameButton.disabled = true;
@@ -326,7 +366,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Stats Helper (Unchanged) ---
     function computeReactionStats(reactionTimes) { if (reactionTimes.length === 0) return null; const fastest = Math.min(...reactionTimes); const slowest = Math.max(...reactionTimes); const average = reactionTimes.reduce((a, b) => a + b, 0) / reactionTimes.length; let stdev = 0; if (reactionTimes.length > 1) { const mean = average; const diffs = reactionTimes.map(rt => (rt - mean) ** 2); stdev = Math.sqrt(diffs.reduce((a, b) => a + b, 0) / (reactionTimes.length - 1)); } return { fastest, slowest, average, stdev }; }
     
-    // --- Game Logic & Flow (Unchanged) ---
+    // --- Game Logic & Flow ---
     function resetAllTimersAndLoops() { gameActive = false; clearTimeout(preCountdownTimeout); preCountdownTimeout = null; preCountdownEndTime = 0; clearInterval(countdownInterval); countdownInterval = null; document.removeEventListener('keydown', handlePreGameKeyDown); document.removeEventListener('keydown', handleGoKeyDown); preGameListenersActive = false; }
     function updateGameParameters() { if (currentDifficulty === 'manual') { incrementPerTap = parseInt(incrementSlider.value); drainRate = parseFloat(drainRateSlider.value) / 10; } else { const settings = difficultySettings[currentDifficulty]; incrementPerTap = settings.increment; drainRate = settings.drainRate; incrementSlider.value = incrementPerTap; drainRateSlider.value = settings.drainSlider; } incrementValueDisplay.textContent = incrementSlider.value; drainRateValueDisplay.textContent = (parseFloat(drainRateSlider.value) / 10).toFixed(1); startMode = startModeSelect.value; startBoostMultiplier = parseFloat(boostSlider.value) / 10; boostValueDisplay.textContent = startBoostMultiplier.toFixed(1); falseStartPenalty = falseStartPenaltySelect.value; const startSystemDisabled = startMode === 'disabled'; boostSliderGroup.classList.toggle('hidden', startSystemDisabled); falseStartPenaltyGroup.classList.toggle('hidden', startSystemDisabled); updateKeyConfigVisibility(); }
     function prepareGameBoard() { updateGameParameters(); winnerAnnEl.innerHTML = ''; winnerAnnEl.className = ''; activePlayers.forEach(p => { p.horseElement.innerHTML = p.sprite; p.horseElement.style.transform = `translateX(0px) scaleX(-1)`; p.horseElement.style.opacity = '1'; p.horseElement.classList.remove('perfect-start-highlight'); p.forceBarElement.style.height = '0%'; p.position = 0; p.force = 0; p.startState = 'waiting'; p.isStalled = false; p.goKey1Pressed = false; p.goKey2Pressed = false; p.gamepadButtonPressedLastFrame = false; p.clicks = 0; p.lastCpsUpdateTime = 0; if (p.cpsDisplayElement) p.cpsDisplayElement.textContent = 'CPS: 0.0'; p.raceStats = { startTime: 0, totalClicks: 0, startReactionTime: -1, forceSum: 0, frameCount: 0 }; }); updateGameReadyState(); }
@@ -334,8 +374,21 @@ document.addEventListener('DOMContentLoaded', () => {
     function updatePreCountdownDisplay() { clearTimeout(preCountdownTimeout); const remaining = preCountdownEndTime - Date.now(); if (remaining <= 0) { countdownDisplay.textContent = 'Starting...'; preCountdownEndTime = 0; startRaceSequence(); } else { countdownDisplay.textContent = `Next race in ${Math.ceil(remaining / 1000)}...`; preCountdownTimeout = setTimeout(updatePreCountdownDisplay, 200); } }
     function startAutomaticRematchCountdown() { if(document.hidden) return; logMessage("⏱️ Next race starts automatically in 5 seconds... Press 'New Game' to start sooner."); preCountdownEndTime = Date.now() + 5000; updatePreCountdownDisplay(); }
     function cancelPreCountdown() { if (preCountdownEndTime > 0) { resetAllTimersAndLoops(); logMessage("🚦 Automatic rematch cancelled."); updateGameReadyState(); } }
-    function initGame() { if (activePlayers.length < 2) { logMessage("⚠️ At least two players must join to start a game."); return; } resetAllTimersAndLoops(); logList.innerHTML = '<li>🚀 New race started...</li>'; if (audioContext && audioContext.state === 'suspended') audioContext.resume(); startRaceSequence(); }
-    function startCountdown(duration, textPrefix) { let count = duration; countdownDisplay.textContent = `${textPrefix} ${count}`; playSound({ frequency: 330, duration: 0.15, type: 'sine' }); countdownInterval = setInterval(() => { count--; if (count > 0) { countdownDisplay.textContent = `${textPrefix} ${count}`; playSound({ frequency: 330, duration: 0.15, type: 'sine' }); } else { clearInterval(countdownInterval); countdownInterval = null; document.removeEventListener('keydown', handlePreGameKeyDown); preGameListenersActive = false; countdownDisplay.textContent = 'GO!'; playSound({ frequency: 523, duration: 0.3, type: 'square' }); goTime = performance.now(); if (startMode !== 'disabled') { document.addEventListener('keydown', handleGoKeyDown); setTimeout(() => { document.removeEventListener('keydown', handleGoKeyDown); startGame(); }, PERFECT_START_WINDOW_MS); } else { startGame(); } } }, 1000); }
+    function initGame() {
+        cancelAutoCountdown();
+        if (activePlayers.length < 2) { logMessage("⚠️ At least two players must join to start a game."); return; }
+        resetAllTimersAndLoops();
+        logList.innerHTML = '<li>🚀 New race started...</li>';
+        if (audioContext && audioContext.state === 'suspended') audioContext.resume();
+        startRaceSequence();
+    }
+    function startCountdown(duration, textPrefix) {
+        countdownDisplay.classList.remove('message-mode'); // [FIX] Use number styling
+        let count = duration;
+        countdownDisplay.textContent = `${textPrefix} ${count}`;
+        playSound({ frequency: 330, duration: 0.15, type: 'sine' });
+        countdownInterval = setInterval(() => { count--; if (count > 0) { countdownDisplay.textContent = `${textPrefix} ${count}`; playSound({ frequency: 330, duration: 0.15, type: 'sine' }); } else { clearInterval(countdownInterval); countdownInterval = null; document.removeEventListener('keydown', handlePreGameKeyDown); preGameListenersActive = false; countdownDisplay.textContent = 'GO!'; playSound({ frequency: 523, duration: 0.3, type: 'square' }); goTime = performance.now(); if (startMode !== 'disabled') { document.addEventListener('keydown', handleGoKeyDown); setTimeout(() => { document.removeEventListener('keydown', handleGoKeyDown); startGame(); }, PERFECT_START_WINDOW_MS); } else { startGame(); } } }, 1000);
+    }
     function startGame() { if (startMode === 'two') { activePlayers.forEach(p => { if (p.startState === 'waiting' && p.goKey1Pressed && p.goKey2Pressed) { p.startState = 'boosted'; } }); } activePlayers.forEach(p => { p.raceStats.startTime = goTime; if (p.isBot && p.startState === 'waiting') { if (Math.random() * 100 < p.botSettings.perfectStartChance) { p.startState = 'boosted'; } } if (p.startState === 'boosted') { logMessage(`🚀 ${p.name} gets a PERFECT START!`); playSound({ frequency: 660, duration: 0.2, type: 'triangle', volume: 0.2 }); p.horseElement.classList.add('perfect-start-highlight'); const boostPixels = p.horseElement.clientWidth * startBoostMultiplier; p.position += boostPixels; } else if (p.startState === 'false_start') { p.isStalled = true; setTimeout(() => { p.isStalled = false; p.horseElement.style.opacity = '1'; logMessage(`👍 ${p.name} can now move!`); }, FALSE_START_STALL_MS); } }); logMessage(`📣🏁 The race has begun!`); gameActive = true; lastTime = 0; updateGameReadyState(); requestAnimationFrame(gameLoop); }
     function updateBots(deltaTime) { let leadHumanPosition = -1; const humanPlayers = activePlayers.filter(p => !p.isBot); if (humanPlayers.length > 0) { leadHumanPosition = Math.max(...humanPlayers.map(p => p.position)); } activePlayers.forEach(bot => { if (!bot.isBot || !gameActive || bot.isStalled) return; const baseCPS = bot.botSettings.cps; let finalCPS = baseCPS; if (bot.botSettings.mode === 'rubberband' && leadHumanPosition !== -1) { const trackWidth = raceTrack.querySelector('.lane').clientWidth - 60; const distanceToLead = leadHumanPosition - bot.position; const adjustmentMultiplier = 1 - (distanceToLead / trackWidth) * 0.8; finalCPS = baseCPS * Math.max(0.5, Math.min(1.5, adjustmentMultiplier)); } const pressesThisFrame = finalCPS * deltaTime; const clicksForStats = Math.round(pressesThisFrame); bot.raceStats.totalClicks += clicksForStats; bot.force += pressesThisFrame * incrementPerTap; if (bot.force > 100) bot.force = 100; }); }
     function gameLoop(currentTime) { if (!lastTime) lastTime = currentTime; const deltaTime = (currentTime - lastTime) / 1000; lastTime = currentTime; handleGamepadInput(currentTime); if (!gameActive) { requestAnimationFrame(gameLoop); return; } updateBots(deltaTime); activePlayers.forEach(p => { if (!p.isBot) { if (!p.lastCpsUpdateTime) p.lastCpsUpdateTime = currentTime; const timeSinceLastUpdate = currentTime - p.lastCpsUpdateTime; if (timeSinceLastUpdate >= CPS_UPDATE_INTERVAL_MS) { const timeDeltaSeconds = timeSinceLastUpdate / 1000; const cps = (p.clicks / timeDeltaSeconds).toFixed(1); p.cpsDisplayElement.textContent = `CPS: ${cps}`; p.clicks = 0; p.lastCpsUpdateTime = currentTime; } } p.raceStats.forceSum += p.force; p.raceStats.frameCount++; if (p.force > 0) { p.force -= drainRate * (deltaTime * 60); if (p.force < 0) p.force = 0; } if (!p.isStalled) { let currentSpeed = (p.force / 100) * MAX_SPEED; p.position += currentSpeed * deltaTime; } p.horseElement.style.transform = `translateX(${p.position}px) scaleX(-1)`; p.forceBarElement.style.height = `${p.force}%`; }); checkWinCondition(); requestAnimationFrame(gameLoop); }
@@ -403,7 +456,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- [REWRITTEN] UI & Modals ---
+    // --- UI & Modals ---
     function updatePlayerControlTitle(player) {
         if (!player || !player.controlsTitleElement) return;
 
@@ -465,12 +518,23 @@ document.addEventListener('DOMContentLoaded', () => {
             player.botSettings.mode = target.value;
         }
     }
-    function startKeyChange(button) { playerToChangeKey = activePlayers.find(p => p.id === button.dataset.playerId); keyToChangeIndex = parseInt(button.dataset.keyIndex); button.textContent = 'Press key...'; button.classList.add('is-listening'); document.addEventListener('keydown', handleKeySelection, { once: true }); }
+    function startKeyChange(button) { playerToChangeKey = activePlayers.find(p => p.id === button.dataset.playerId); keyToChangeKey = parseInt(button.dataset.keyIndex); button.textContent = 'Press key...'; button.classList.add('is-listening'); document.addEventListener('keydown', handleKeySelection, { once: true }); }
     function getKeyDisplay(e) { if (e.key === ' ') return 'Space'; if (e.key.includes('Arrow')) return e.key.replace('Arrow', '') + ' Arrow'; return e.key.length === 1 ? e.key.toUpperCase() : e.key; }
-    function handleKeySelection(e) { e.preventDefault(); const newKey = e.key.toLowerCase(); const newKeyDisplay = getKeyDisplay(e); const isKeyInUse = activePlayers.some(p => (p.key === newKey || p.key2 === newKey) && p.id !== playerToChangeKey.id); if (isKeyInUse) { alert(`Key "${newKeyDisplay}" is already in use.`); } else { if (keyToChangeIndex === 1) { playerToChangeKey.key = newKey; playerToChangeKey.keyDisplay = newKeyDisplay; playerToChangeKey.keyDisplayElement1.textContent = newKeyDisplay; } else { playerToChangeKey.key2 = newKey; playerToChangeKey.key2Display = newKeyDisplay; playerToChangeKey.keyDisplayElement2.textContent = newKeyDisplay; } updatePlayerControlTitle(playerToChangeKey); } const button = playerToChangeKey.customizeElement.querySelector(`.change-key-btn[data-key-index="${keyToChangeIndex}"]`); button.textContent = 'Change'; button.classList.remove('is-listening'); playerToChangeKey = null; }
-    function openModal(modal) { cancelPreCountdown(); modalOverlay.classList.remove('hidden'); modal.classList.remove('hidden'); }
-    function closeAllModals() { if (playerToChangeKey) { const button = playerToChangeKey.customizeElement.querySelector('.is-listening'); if (button) { button.textContent = 'Change'; button.classList.remove('is-listening'); } playerToChangeKey = null; document.removeEventListener('keydown', handleKeySelection); } modalOverlay.classList.add('hidden'); customizeModal.classList.add('hidden'); helpModal.classList.add('hidden'); }
-    function openCustomizeModal() { openModal(customizeModal); }
+    function handleKeySelection(e) { e.preventDefault(); const newKey = e.key.toLowerCase(); const newKeyDisplay = getKeyDisplay(e); const isKeyInUse = activePlayers.some(p => (p.key === newKey || p.key2 === newKey) && p.id !== playerToChangeKey.id); if (isKeyInUse) { alert(`Key "${newKeyDisplay}" is already in use.`); } else { if (keyToChangeKey === 1) { playerToChangeKey.key = newKey; playerToChangeKey.keyDisplay = newKeyDisplay; playerToChangeKey.keyDisplayElement1.textContent = newKeyDisplay; } else { playerToChangeKey.key2 = newKey; playerToChangeKey.key2Display = newKeyDisplay; playerToChangeKey.keyDisplayElement2.textContent = newKeyDisplay; } updatePlayerControlTitle(playerToChangeKey); } const button = playerToChangeKey.customizeElement.querySelector(`.change-key-btn[data-key-index="${keyToChangeKey}"]`); button.textContent = 'Change'; button.classList.remove('is-listening'); playerToChangeKey = null; }
+    function openModal(modal) {
+        cancelAutoCountdown();
+        cancelPreCountdown();
+        modalOverlay.classList.remove('hidden');
+        modal.classList.remove('hidden');
+    }
+    function closeAllModals() {
+        if (playerToChangeKey) { const button = playerToChangeKey.customizeElement.querySelector('.is-listening'); if (button) { button.textContent = 'Change'; button.classList.remove('is-listening'); } playerToChangeKey = null; document.removeEventListener('keydown', handleKeySelection); }
+        modalOverlay.classList.add('hidden');
+        customizeModal.classList.add('hidden');
+        helpModal.classList.add('hidden');
+        startOrResetAutoCountdown();
+    }
+
     function toggleHelpModal() { if (helpModal.classList.contains('hidden')) { helpControlsList.innerHTML = ''; if (activePlayers.length > 0) { activePlayers.forEach(p => { const item = document.createElement('div'); item.className = 'help-control-item'; let controlText; switch(p.controllerType) { case 'keyboard': controlText = `<span class="key">${p.keyDisplay}</span>`; if (startMode === 'two') { controlText += ` & <span class="key">${p.key2Display}</span>`; } break; case 'gamepad': controlText = `<span class="key">GP ${p.gamepadIndex}</span>`; break; case 'bot': controlText = `<span class="key">BOT</span>`; break; default: controlText = `<span class="key">Not Connected</span>`; break; } item.innerHTML = `<p>${p.name}: ${controlText}</p>`; item.style.borderColor = p.color; helpControlsList.appendChild(item); }); } else { helpControlsList.innerHTML = '<p>No players have been added yet.</p>'; } openModal(helpModal); } else { closeAllModals(); } }
     function updateKeyConfigVisibility() { document.querySelectorAll('.key-config-area[data-key-index="2"]').forEach(el => { el.classList.toggle('hidden', startMode !== 'two'); }); }
     function logMessage(message) { const li = document.createElement('li'); li.textContent = message; logList.appendChild(li); logContainer.scrollTop = logContainer.scrollHeight; }
@@ -481,7 +545,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.addEventListener('keyup', handleKeyUp);
     newGameButton.addEventListener('click', initGame);
     addPlayerButton.addEventListener('click', addPlayer);
-    customizeToggleButton.addEventListener('click', openCustomizeModal);
+    customizeToggleButton.addEventListener('click', () => openModal(customizeModal)); // [FIX] Call the correct function
     closeCustomizeModalButton.addEventListener('click', closeAllModals);
     customizeModal.addEventListener('click', handleCustomizeInteraction);
     customizeModal.addEventListener('input', (e) => { const target = e.target; const playerSection = target.closest('.customize-player-section'); if (!playerSection) return; const player = activePlayers.find(p => p.id === playerSection.dataset.playerId); if (!player) return; const parentGroup = target.closest('.settings-group'); if (!parentGroup) return; if (target.matches('.bot-cps-slider')) { const newValue = parseFloat(target.value); player.botSettings.cps = newValue; const inputField = parentGroup.querySelector('.bot-cps-input'); if (inputField) inputField.value = newValue.toFixed(1); } else if (target.matches('.bot-cps-input')) { const newValue = parseFloat(target.value); const slider = parentGroup.querySelector('.bot-cps-slider'); if (slider) slider.value = newValue; } else if (target.matches('.perfect-start-chance-slider')) { player.botSettings.perfectStartChance = parseInt(target.value); player.customizeElement.querySelector('.perfect-start-chance-display').textContent = target.value; } });

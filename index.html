@@ -7,13 +7,20 @@
     <link rel="stylesheet" href="style.css">
     
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🏇</text></svg>">
+
+    <!-- [FIX] Added style to handle smaller font size for messages -->
+    <style>
+        #countdown-display.message-mode {
+            font-size: 1.5em; /* Smaller font for long text messages */
+            line-height: 1.4;
+        }
+    </style>
 </head>
 <body>
 
     <div id="game-container">
         <div class="top-bar">
             <h1>Hevoskisat Clicker Challenge</h1>
-            <!-- Player management UI is RESTORED -->
             <div id="player-management">
                 <select id="player-select"></select>
                 <button id="add-player-button">Add Player</button>
