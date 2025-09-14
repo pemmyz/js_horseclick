@@ -7,6 +7,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const logList = document.getElementById('log-list');
     const logContainer = document.getElementById('log-container');
     const countdownDisplay = document.getElementById('countdown-display');
+    // --- [RESTORED] --- Manual add player elements
     const playerSelect = document.getElementById('player-select');
     const addPlayerButton = document.getElementById('add-player-button');
     const customizeToggleButton = document.getElementById('customize-toggle-button');
@@ -41,6 +42,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Game Settings & Configs ---
     const MAX_SPEED = 200;
+    const MAX_PLAYERS = 4;
     const difficultySettings = {
         easy:   { increment: 18, drainRate: 0.2, drainSlider: 2 },
         medium: { increment: 12, drainRate: 0.4, drainSlider: 4 },
@@ -74,48 +76,18 @@ document.addEventListener('DOMContentLoaded', () => {
     let preCountdownTimeout = null;
     let preCountdownEndTime = 0;
     let gamepads = {};
-    let assignedGamepadIndices = new Set(); // NEW: Tracks which gamepad indices are in use.
+    let assignedInputs = new Set();
+    let lastGamepadButtonStates = {};
 
     // --- Audio Functions ---
-    function initAudio() {
-        try {
-            if (!audioContext) {
-                audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                masterGainNode = audioContext.createGain();
-                masterGainNode.connect(audioContext.destination);
-                masterGainNode.gain.setValueAtTime(masterVolume, audioContext.currentTime);
-            }
-        } catch (e) { console.warn("Web Audio API is not supported."); document.getElementById('audio-controls').style.display = 'none'; }
-    }
-    function playSound({ frequency = 440, duration = 0.1, volume = 0.15, type = 'sine' }) {
-        if (!audioContext || !masterGainNode) return;
-        const oscillator = audioContext.createOscillator();
-        const gainNode = audioContext.createGain();
-        oscillator.connect(gainNode);
-        gainNode.connect(masterGainNode);
-        oscillator.type = type;
-        oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
-        gainNode.gain.setValueAtTime(0, audioContext.currentTime);
-        gainNode.gain.linearRampToValueAtTime(volume, audioContext.currentTime + 0.01);
-        gainNode.gain.setValueAtTime(volume, audioContext.currentTime + duration - 0.02);
-        gainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime + duration);
-        oscillator.start(audioContext.currentTime);
-        oscillator.stop(audioContext.currentTime + duration);
-    }
+    function initAudio() { try { if (!audioContext) { audioContext = new (window.AudioContext || window.webkitAudioContext)(); masterGainNode = audioContext.createGain(); masterGainNode.connect(audioContext.destination); masterGainNode.gain.setValueAtTime(masterVolume, audioContext.currentTime); } } catch (e) { console.warn("Web Audio API is not supported."); document.getElementById('audio-controls').style.display = 'none'; } }
+    function playSound({ frequency = 440, duration = 0.1, volume = 0.15, type = 'sine' }) { if (!audioContext || !masterGainNode) return; const oscillator = audioContext.createOscillator(); const gainNode = audioContext.createGain(); oscillator.connect(gainNode); gainNode.connect(masterGainNode); oscillator.type = type; oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime); gainNode.gain.setValueAtTime(0, audioContext.currentTime); gainNode.gain.linearRampToValueAtTime(volume, audioContext.currentTime + 0.01); gainNode.gain.setValueAtTime(volume, audioContext.currentTime + duration - 0.02); gainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime + duration); oscillator.start(audioContext.currentTime); oscillator.stop(audioContext.currentTime + duration); }
     function updateMuteButtonUI() { muteButton.textContent = isMuted ? '🔇' : '🔊'; }
-    volumeSlider.addEventListener('input', (e) => {
-        masterVolume = parseFloat(e.target.value);
-        if (masterGainNode) masterGainNode.gain.setValueAtTime(masterVolume, audioContext.currentTime);
-        isMuted = false;
-        updateMuteButtonUI();
-    });
-    muteButton.addEventListener('click', () => {
-        isMuted = !isMuted;
-        if (masterGainNode) masterGainNode.gain.setValueAtTime(isMuted ? 0 : masterVolume, audioContext.currentTime);
-        updateMuteButtonUI();
-    });
+    volumeSlider.addEventListener('input', (e) => { masterVolume = parseFloat(e.target.value); if (masterGainNode) masterGainNode.gain.setValueAtTime(masterVolume, audioContext.currentTime); isMuted = false; updateMuteButtonUI(); });
+    muteButton.addEventListener('click', () => { isMuted = !isMuted; if (masterGainNode) masterGainNode.gain.setValueAtTime(isMuted ? 0 : masterVolume, audioContext.currentTime); updateMuteButtonUI(); });
 
-    // --- Player Management ---
+
+    // --- Player Management (Hybrid: Manual + Dynamic) ---
     function populatePlayerDropdown() {
         playerSelect.innerHTML = '';
         const unselectedPlayers = availablePlayers.filter(ap => !activePlayers.some(p => p.id === ap.id));
@@ -125,26 +97,83 @@ document.addEventListener('DOMContentLoaded', () => {
             option.textContent = p.name;
             playerSelect.appendChild(option);
         });
-        addPlayerButton.disabled = unselectedPlayers.length === 0 || activePlayers.length >= 4;
+        addPlayerButton.disabled = unselectedPlayers.length === 0 || activePlayers.length >= MAX_PLAYERS;
     }
-    function addPlayer() {
+
+    function addPlayer() { // Manual Add
         if (playerSelect.value) {
             const playerData = availablePlayers.find(p => p.id === playerSelect.value);
             if (!playerData) return;
             createPlayer(playerData);
+            logMessage(`👍 ${playerData.name} slot added manually. Configure in Customize menu.`);
+            // A manually added player starts as human but without assigned keys in the `assignedInputs` set
+            // They can be set to AI or a dynamic input can connect to them.
             populatePlayerDropdown();
             updateGridLayout();
             updateGameReadyState();
         }
     }
+
+    function handleJoinAttempt(inputType, details) { // Dynamic Join
+        if (gameActive || activePlayers.length >= MAX_PLAYERS) return;
+
+        // Find the first available player configuration that is not currently in use
+        const playerData = availablePlayers.find(p => !activePlayers.some(ap => ap.id === p.id));
+        if (!playerData) {
+            logMessage("⚠️ No more player slots available.");
+            return;
+        }
+
+        // Add the inputs to the assigned set BEFORE creating the player
+        if (inputType === 'keyboard') {
+            const inputKey = details.key;
+            // Find which player preset this key belongs to
+            const joiningPlayerConfig = availablePlayers.find(p => p.key === inputKey || p.key2 === inputKey);
+            // Check if that player slot is already taken
+            if (activePlayers.some(p => p.id === joiningPlayerConfig.id)) {
+                 logMessage(`⚠️ ${joiningPlayerConfig.name} is already in the game.`);
+                 return;
+            }
+            assignedInputs.add(`keyboard_${joiningPlayerConfig.key}`);
+            assignedInputs.add(`keyboard_${joiningPlayerConfig.key2}`);
+            createPlayer(joiningPlayerConfig);
+        } else if (inputType === 'gamepad') {
+            assignedInputs.add(`gamepad_${details.index}`);
+            // Find first available human player WITHOUT a gamepad to connect to them
+            let playerToAssign = activePlayers.find(p => !p.isBot && p.gamepadIndex === null);
+            if(playerToAssign){
+                // Connect to existing player
+                playerToAssign.gamepadIndex = details.index;
+                updatePlayerControlTitle(playerToAssign);
+                logMessage(`🎮 Gamepad ${details.index} connected to ${playerToAssign.name}.`);
+                return;
+            } else {
+                 // No free human player, so create a new one
+                if (!playerData) return; // double check
+                createPlayer(playerData);
+                playerToAssign = activePlayers[activePlayers.length-1];
+                playerToAssign.gamepadIndex = details.index;
+                updatePlayerControlTitle(playerToAssign);
+            }
+        }
+        
+        const newPlayer = activePlayers[activePlayers.length-1];
+        logMessage(`👍 ${newPlayer.name} has joined the game!`);
+        populatePlayerDropdown();
+        updateGridLayout();
+        updateGameReadyState();
+    }
+    
     function removePlayer(playerId) {
         const playerIndex = activePlayers.findIndex(p => p.id === playerId);
         if (playerIndex > -1) {
             const player = activePlayers[playerIndex];
 
-            // NEW: Unassign gamepad if one was connected
+            // Free up the controls associated with this player
+            assignedInputs.delete(`keyboard_${player.key}`);
+            assignedInputs.delete(`keyboard_${player.key2}`);
             if (player.gamepadIndex !== null) {
-                assignedGamepadIndices.delete(player.gamepadIndex);
+                assignedInputs.delete(`gamepad_${player.gamepadIndex}`);
                 logMessage(`🎮 Gamepad ${player.gamepadIndex} is now available.`);
             }
 
@@ -152,11 +181,13 @@ document.addEventListener('DOMContentLoaded', () => {
             player.controlsElement.remove();
             player.customizeElement.remove();
             activePlayers.splice(playerIndex, 1);
+            
             populatePlayerDropdown();
             updateGridLayout();
             updateGameReadyState();
         }
     }
+    
     function createPlayer(playerData) {
         const laneContainer = document.createElement('div');
         laneContainer.className = 'lane-container';
@@ -248,15 +279,12 @@ document.addEventListener('DOMContentLoaded', () => {
             botSettingsContainer: customizeSection.querySelector('.bot-settings-container'),
             raceStats: { startTime: 0, totalClicks: 0, startReactionTime: -1, forceSum: 0, frameCount: 0 },
             sessionStats: { wins: 0, racesPlayed: 0, bestRaceTime: Infinity, bestReactionTime: Infinity, bestAvgCPS: 0, winningStreak: 0, longestWinningStreak: 0, allReactionTimes: [] },
-            gamepadIndex: null, // NEW: To store assigned gamepad index
+            gamepadIndex: null,
         };
         activePlayers.push(playerObject);
-        updatePlayerControlTitle(playerObject); // NEW: Centralized title update
+        updatePlayerControlTitle(playerObject);
         updateKeyConfigVisibility();
-        const pressAction = (e) => {
-            e.preventDefault();
-            triggerPlayerTap(playerObject);
-        };
+        const pressAction = (e) => { e.preventDefault(); triggerPlayerTap(playerObject); };
         const releaseAction = () => { playerObject.isKeyDown = false; };
         playerObject.controlsElement.addEventListener('mousedown', pressAction);
         playerObject.controlsElement.addEventListener('touchstart', pressAction, { passive: false });
@@ -265,6 +293,7 @@ document.addEventListener('DOMContentLoaded', () => {
         playerObject.controlsElement.addEventListener('touchend', releaseAction);
         laneContainer.querySelector('.remove-player-btn').addEventListener('click', () => removePlayer(playerData.id));
     }
+    
     function triggerPlayerTap(player) {
         if (player.isBot || !gameActive || player.isKeyDown || player.isStalled) return;
         player.isKeyDown = true;
@@ -273,731 +302,194 @@ document.addEventListener('DOMContentLoaded', () => {
         player.raceStats.totalClicks++;
         if (player.force > 100) player.force = 100;
     }
+
     function updateGridLayout() {
         const numPlayers = activePlayers.length > 0 ? activePlayers.length : 1;
         controlsContainer.style.gridTemplateColumns = `repeat(${numPlayers}, 1fr)`;
     }
+
     function updateGameReadyState() {
-        newGameButton.disabled = activePlayers.length === 0;
+        if (gameActive || preCountdownEndTime > 0 || countdownInterval) return;
         if (activePlayers.length === 0) {
-            countdownDisplay.textContent = 'Add a player to begin!';
-        } else if (!gameActive && preCountdownEndTime === 0 && !countdownInterval) {
+            countdownDisplay.textContent = 'Add a player or press a key to Join!';
+            newGameButton.disabled = true;
+        } else if (activePlayers.length < 2) {
+            countdownDisplay.textContent = 'Waiting for one more player...';
+            newGameButton.disabled = true;
+        } else {
             countdownDisplay.textContent = 'Press New Game to start';
+            newGameButton.disabled = false;
         }
     }
 
     // --- Stats Helper ---
-    function computeReactionStats(reactionTimes) {
-        if (reactionTimes.length === 0) return null;
-        const fastest = Math.min(...reactionTimes);
-        const slowest = Math.max(...reactionTimes);
-        const average = reactionTimes.reduce((a, b) => a + b, 0) / reactionTimes.length;
-        let stdev = 0;
-        if (reactionTimes.length > 1) {
-            const mean = average;
-            const diffs = reactionTimes.map(rt => (rt - mean) ** 2);
-            stdev = Math.sqrt(diffs.reduce((a, b) => a + b, 0) / (reactionTimes.length - 1));
-        }
-        return { fastest, slowest, average, stdev };
-    }
-
+    function computeReactionStats(reactionTimes) { if (reactionTimes.length === 0) return null; const fastest = Math.min(...reactionTimes); const slowest = Math.max(...reactionTimes); const average = reactionTimes.reduce((a, b) => a + b, 0) / reactionTimes.length; let stdev = 0; if (reactionTimes.length > 1) { const mean = average; const diffs = reactionTimes.map(rt => (rt - mean) ** 2); stdev = Math.sqrt(diffs.reduce((a, b) => a + b, 0) / (reactionTimes.length - 1)); } return { fastest, slowest, average, stdev }; }
+    
     // --- Game Logic & Flow ---
-    function resetAllTimersAndLoops() {
-        gameActive = false;
-        clearTimeout(preCountdownTimeout);
-        preCountdownTimeout = null;
-        preCountdownEndTime = 0;
-        clearInterval(countdownInterval);
-        countdownInterval = null;
-        document.removeEventListener('keydown', handlePreGameKeyDown);
-        document.removeEventListener('keydown', handleGoKeyDown);
-        preGameListenersActive = false;
-    }
-    function updateGameParameters() {
-        if (currentDifficulty === 'manual') {
-            incrementPerTap = parseInt(incrementSlider.value);
-            drainRate = parseFloat(drainRateSlider.value) / 10;
-        } else {
-            const settings = difficultySettings[currentDifficulty];
-            incrementPerTap = settings.increment;
-            drainRate = settings.drainRate;
-            incrementSlider.value = incrementPerTap;
-            drainRateSlider.value = settings.drainSlider;
-        }
-        incrementValueDisplay.textContent = incrementSlider.value;
-        drainRateValueDisplay.textContent = (parseFloat(drainRateSlider.value) / 10).toFixed(1);
-        startMode = startModeSelect.value;
-        startBoostMultiplier = parseFloat(boostSlider.value) / 10;
-        boostValueDisplay.textContent = startBoostMultiplier.toFixed(1);
-        falseStartPenalty = falseStartPenaltySelect.value;
-        const startSystemDisabled = startMode === 'disabled';
-        boostSliderGroup.classList.toggle('hidden', startSystemDisabled);
-        falseStartPenaltyGroup.classList.toggle('hidden', startSystemDisabled);
-        updateKeyConfigVisibility();
-    }
-    function prepareGameBoard() {
-        updateGameParameters();
-        winnerAnnEl.innerHTML = '';
-        winnerAnnEl.className = '';
-        activePlayers.forEach(p => {
-            p.horseElement.innerHTML = p.sprite;
-            p.horseElement.style.transform = `translateX(0px) scaleX(-1)`;
-            p.horseElement.style.opacity = '1';
-            p.horseElement.classList.remove('perfect-start-highlight');
-            p.forceBarElement.style.height = '0%';
-            p.position = 0; p.force = 0;
-            p.startState = 'waiting'; p.isStalled = false;
-            p.goKey1Pressed = false; p.goKey2Pressed = false;
-            p.gamepadButtonPressedLastFrame = false;
-            p.clicks = 0; p.lastCpsUpdateTime = 0;
-            if (p.cpsDisplayElement) p.cpsDisplayElement.textContent = 'CPS: 0.0';
-            p.raceStats = { startTime: 0, totalClicks: 0, startReactionTime: -1, forceSum: 0, frameCount: 0 };
-        });
-        updateGameReadyState();
-    }
-    function startRaceSequence() {
-        prepareGameBoard();
-        if (startMode !== 'disabled') {
-            document.addEventListener('keydown', handlePreGameKeyDown);
-            preGameListenersActive = true;
-        }
-        startCountdown(3, 'Get Ready...');
-    }
-    function updatePreCountdownDisplay() {
-        clearTimeout(preCountdownTimeout);
-        const remaining = preCountdownEndTime - Date.now();
-        if (remaining <= 0) {
-            countdownDisplay.textContent = 'Starting...';
-            preCountdownEndTime = 0;
-            startRaceSequence();
-        } else {
-            countdownDisplay.textContent = `Next race in ${Math.ceil(remaining / 1000)}...`;
-            preCountdownTimeout = setTimeout(updatePreCountdownDisplay, 200);
-        }
-    }
-    function startAutomaticRematchCountdown() {
-        if(document.hidden) return;
-        logMessage("⏱️ Next race starts automatically in 5 seconds... Press 'New Game' to start sooner.");
-        preCountdownEndTime = Date.now() + 5000;
-        updatePreCountdownDisplay();
-    }
-    function cancelPreCountdown() {
-        if (preCountdownEndTime > 0) {
-            resetAllTimersAndLoops();
-            logMessage("🚦 Automatic rematch cancelled.");
-            updateGameReadyState();
-        }
-    }
-    function initGame() {
-        if (activePlayers.length === 0) {
-            logMessage("⚠️ Add at least one player to start a game.");
-            return;
-        }
-        resetAllTimersAndLoops();
-        logList.innerHTML = '<li>🚀 New race started...</li>';
-        if (audioContext && audioContext.state === 'suspended') audioContext.resume();
-        startRaceSequence();
-    }
-    function startCountdown(duration, textPrefix) {
-        let count = duration;
-        countdownDisplay.textContent = `${textPrefix} ${count}`;
-        playSound({ frequency: 330, duration: 0.15, type: 'sine' });
-        countdownInterval = setInterval(() => {
-            count--;
-            if (count > 0) {
-                countdownDisplay.textContent = `${textPrefix} ${count}`;
-                playSound({ frequency: 330, duration: 0.15, type: 'sine' });
-            } else {
-                clearInterval(countdownInterval);
-                countdownInterval = null;
-                document.removeEventListener('keydown', handlePreGameKeyDown);
-                preGameListenersActive = false;
-                countdownDisplay.textContent = 'GO!';
-                playSound({ frequency: 523, duration: 0.3, type: 'square' });
-                goTime = performance.now();
-                if (startMode !== 'disabled') {
-                    document.addEventListener('keydown', handleGoKeyDown);
-                    setTimeout(() => {
-                        document.removeEventListener('keydown', handleGoKeyDown);
-                        startGame();
-                    }, PERFECT_START_WINDOW_MS);
-                } else {
-                    startGame();
-                }
-            }
-        }, 1000);
-    }
-    function startGame() {
-        if (startMode === 'two') {
-            activePlayers.forEach(p => {
-                if (p.startState === 'waiting' && p.goKey1Pressed && p.goKey2Pressed) {
-                    p.startState = 'boosted';
-                }
-            });
-        }
-        activePlayers.forEach(p => {
-            p.raceStats.startTime = goTime;
-            if (p.isBot && p.startState === 'waiting') {
-                if (Math.random() * 100 < p.botSettings.perfectStartChance) {
-                    p.startState = 'boosted';
-                }
-            }
-            if (p.startState === 'boosted') {
-                logMessage(`🚀 ${p.name} gets a PERFECT START!`);
-                playSound({ frequency: 660, duration: 0.2, type: 'triangle', volume: 0.2 });
-                p.horseElement.classList.add('perfect-start-highlight');
-                const boostPixels = p.horseElement.clientWidth * startBoostMultiplier;
-                p.position += boostPixels;
-            } else if (p.startState === 'false_start') {
-                p.isStalled = true;
-                setTimeout(() => {
-                    p.isStalled = false;
-                    p.horseElement.style.opacity = '1';
-                    logMessage(`👍 ${p.name} can now move!`);
-                }, FALSE_START_STALL_MS);
-            }
-        });
-        logMessage(`📣🏁 The race has begun!`);
-        gameActive = true;
-        lastTime = 0;
-        updateGameReadyState();
-        requestAnimationFrame(gameLoop);
-    }
-    function updateBots(deltaTime) {
-        let leadHumanPosition = -1;
-        const humanPlayers = activePlayers.filter(p => !p.isBot);
-        if (humanPlayers.length > 0) {
-            leadHumanPosition = Math.max(...humanPlayers.map(p => p.position));
-        }
-        activePlayers.forEach(bot => {
-            if (!bot.isBot || !gameActive || bot.isStalled) return;
-            const baseCPS = bot.botSettings.cps;
-            let finalCPS = baseCPS;
-            if (bot.botSettings.mode === 'rubberband' && leadHumanPosition !== -1) {
-                const trackWidth = raceTrack.querySelector('.lane').clientWidth - 60;
-                const distanceToLead = leadHumanPosition - bot.position;
-                const adjustmentMultiplier = 1 - (distanceToLead / trackWidth) * 0.8;
-                finalCPS = baseCPS * Math.max(0.5, Math.min(1.5, adjustmentMultiplier));
-            }
-            const pressesThisFrame = finalCPS * deltaTime;
-            const clicksForStats = Math.round(pressesThisFrame);
-            bot.raceStats.totalClicks += clicksForStats;
-            bot.force += pressesThisFrame * incrementPerTap;
-            if (bot.force > 100) bot.force = 100;
-        });
-    }
-    function gameLoop(currentTime) {
-        if (!lastTime) lastTime = currentTime;
-        const deltaTime = (currentTime - lastTime) / 1000;
-        lastTime = currentTime;
-
-        handleGamepadInput(currentTime);
-
-        if (!gameActive) {
-             requestAnimationFrame(gameLoop);
-             return;
-        }
-
-        updateBots(deltaTime);
-        activePlayers.forEach(p => {
-            if (!p.isBot) {
-                if (!p.lastCpsUpdateTime) p.lastCpsUpdateTime = currentTime;
-                const timeSinceLastUpdate = currentTime - p.lastCpsUpdateTime;
-                if (timeSinceLastUpdate >= CPS_UPDATE_INTERVAL_MS) {
-                    const timeDeltaSeconds = timeSinceLastUpdate / 1000;
-                    const cps = (p.clicks / timeDeltaSeconds).toFixed(1);
-                    p.cpsDisplayElement.textContent = `CPS: ${cps}`;
-                    p.clicks = 0;
-                    p.lastCpsUpdateTime = currentTime;
-                }
-            }
-            p.raceStats.forceSum += p.force;
-            p.raceStats.frameCount++;
-            if (p.force > 0) {
-                p.force -= drainRate * (deltaTime * 60);
-                if (p.force < 0) p.force = 0;
-            }
-            if (!p.isStalled) {
-                let currentSpeed = (p.force / 100) * MAX_SPEED;
-                p.position += currentSpeed * deltaTime;
-            }
-            p.horseElement.style.transform = `translateX(${p.position}px) scaleX(-1)`;
-            p.forceBarElement.style.height = `${p.force}%`;
-        });
-        checkWinCondition();
-        requestAnimationFrame(gameLoop);
-    }
-    function checkWinCondition() {
-        if (!gameActive) return;
-        if (activePlayers.length === 0) return;
-        const trackWidth = raceTrack.querySelector('.lane').clientWidth - 60;
-        const winner = activePlayers.find(p => p.position >= trackWidth);
-        if (winner) endGame(winner);
-    }
-    function endGame(winner) {
-        resetAllTimersAndLoops();
-        winnerAnnEl.textContent = `${winner.name} Wins!`;
-        winnerAnnEl.style.color = winner.color;
-        
-        logRaceStats(winner);
-        
-        updateWinsDisplay();
-        updateGameReadyState();
-        setTimeout(() => {
-            if (!gameActive && preCountdownEndTime === 0 && !countdownInterval) {
-                 startAutomaticRematchCountdown();
-            }
-        }, 3000);
-    }
-
-    function logRaceStats(winner) {
-        const endTime = performance.now();
-        const raceDuration = goTime > 0 ? (endTime - goTime) / 1000 : 0;
-        let statsLogContent = `<strong>--- Race Over (Duration: ${raceDuration.toFixed(2)}s) ---</strong>\n`;
-        const rankedPlayers = [...activePlayers].sort((a, b) => b.position - a.position);
-        const rankEmojis = ['🏆', '🥈', '🥉', '4️⃣'];
-        statsLogContent += `<strong>Rankings:</strong>\n`;
-        rankedPlayers.forEach((p, index) => {
-            statsLogContent += `${rankEmojis[index] || (index + 1) + '.'} ${p.name}\n`;
-        });
-        statsLogContent += `\n<strong>=== Race Performance ===</strong>\n`;
-        rankedPlayers.forEach((p, index) => {
-            const isWinner = p.id === winner.id;
-            const avgCPS = raceDuration > 0.1 ? (p.raceStats.totalClicks / raceDuration).toFixed(1) : '0.0';
-            const avgForce = p.raceStats.frameCount > 0 ? (p.raceStats.forceSum / p.raceStats.frameCount).toFixed(1) : '0.0';
-            p.sessionStats.racesPlayed++;
-            if (isWinner) {
-                p.sessionStats.wins++;
-                p.sessionStats.winningStreak++;
-                p.sessionStats.longestWinningStreak = Math.max(p.sessionStats.longestWinningStreak, p.sessionStats.winningStreak);
-                p.sessionStats.bestRaceTime = Math.min(p.sessionStats.bestRaceTime, raceDuration);
-            } else {
-                p.sessionStats.winningStreak = 0;
-            }
-            p.sessionStats.bestAvgCPS = Math.max(p.sessionStats.bestAvgCPS, parseFloat(avgCPS) || 0);
-            let reactionText;
-            if (p.isBot) {
-                reactionText = 'N/A (Bot)';
-            } else if (p.raceStats.startReactionTime === -2) {
-                reactionText = 'False Start';
-            } else if (p.raceStats.startReactionTime === -1) {
-                reactionText = 'No start detected';
-            } else {
-                const reactionMs = p.raceStats.startReactionTime.toFixed(0);
-                reactionText = `${reactionMs}ms`;
-                p.sessionStats.bestReactionTime = Math.min(p.sessionStats.bestReactionTime, p.raceStats.startReactionTime);
-            }
-            statsLogContent += `\n<strong>${p.name} (#${index + 1}${isWinner ? ', WINNER' : ''})</strong>\n`;
-            statsLogContent += `  - Avg CPS: ${avgCPS}\n`;
-            statsLogContent += `  - Total Clicks: ${p.raceStats.totalClicks}\n`;
-            statsLogContent += `  - Avg Force: ${avgForce}%\n`;
-            statsLogContent += `  - Start Reaction: ${reactionText}\n`;
-        });
-        statsLogContent += `\n<strong>=== Session Stats Summary ===</strong>\n`;
-        activePlayers.forEach(p => {
-            statsLogContent += `\n<strong>${p.name}</strong>\n`;
-            statsLogContent += `  - Wins: ${p.sessionStats.wins} / ${p.sessionStats.racesPlayed} | Win Streak: ${p.sessionStats.winningStreak} (Best: ${p.sessionStats.longestWinningStreak})\n`;
-            statsLogContent += `  - Best Race Time: ${p.sessionStats.bestRaceTime === Infinity ? 'N/A' : p.sessionStats.bestRaceTime.toFixed(2) + 's'}\n`;
-            statsLogContent += `  - Best Avg CPS: ${p.sessionStats.bestAvgCPS.toFixed(1)}\n`;
-            if (!p.isBot && p.sessionStats.allReactionTimes.length > 0) {
-                const reactionStats = computeReactionStats(p.sessionStats.allReactionTimes);
-                if (reactionStats) {
-                    statsLogContent += `  - Reactions (ms): Avg: ${reactionStats.average.toFixed(0)}, Best: ${reactionStats.fastest.toFixed(0)}, Worst: ${reactionStats.slowest.toFixed(0)}, SD: ${reactionStats.stdev.toFixed(1)}\n`;
-                }
-            }
-        });
-        const li = document.createElement('li');
-        const pre = document.createElement('pre');
-        pre.style.margin = '0';
-        pre.style.whiteSpace = 'pre-wrap'; 
-        pre.style.fontFamily = 'inherit';
-        pre.innerHTML = statsLogContent;
-        li.appendChild(pre);
-        logList.appendChild(li);
-        logContainer.scrollTop = logContainer.scrollHeight;
-    }
+    function resetAllTimersAndLoops() { gameActive = false; clearTimeout(preCountdownTimeout); preCountdownTimeout = null; preCountdownEndTime = 0; clearInterval(countdownInterval); countdownInterval = null; document.removeEventListener('keydown', handlePreGameKeyDown); document.removeEventListener('keydown', handleGoKeyDown); preGameListenersActive = false; }
+    function updateGameParameters() { if (currentDifficulty === 'manual') { incrementPerTap = parseInt(incrementSlider.value); drainRate = parseFloat(drainRateSlider.value) / 10; } else { const settings = difficultySettings[currentDifficulty]; incrementPerTap = settings.increment; drainRate = settings.drainRate; incrementSlider.value = incrementPerTap; drainRateSlider.value = settings.drainSlider; } incrementValueDisplay.textContent = incrementSlider.value; drainRateValueDisplay.textContent = (parseFloat(drainRateSlider.value) / 10).toFixed(1); startMode = startModeSelect.value; startBoostMultiplier = parseFloat(boostSlider.value) / 10; boostValueDisplay.textContent = startBoostMultiplier.toFixed(1); falseStartPenalty = falseStartPenaltySelect.value; const startSystemDisabled = startMode === 'disabled'; boostSliderGroup.classList.toggle('hidden', startSystemDisabled); falseStartPenaltyGroup.classList.toggle('hidden', startSystemDisabled); updateKeyConfigVisibility(); }
+    function prepareGameBoard() { updateGameParameters(); winnerAnnEl.innerHTML = ''; winnerAnnEl.className = ''; activePlayers.forEach(p => { p.horseElement.innerHTML = p.sprite; p.horseElement.style.transform = `translateX(0px) scaleX(-1)`; p.horseElement.style.opacity = '1'; p.horseElement.classList.remove('perfect-start-highlight'); p.forceBarElement.style.height = '0%'; p.position = 0; p.force = 0; p.startState = 'waiting'; p.isStalled = false; p.goKey1Pressed = false; p.goKey2Pressed = false; p.gamepadButtonPressedLastFrame = false; p.clicks = 0; p.lastCpsUpdateTime = 0; if (p.cpsDisplayElement) p.cpsDisplayElement.textContent = 'CPS: 0.0'; p.raceStats = { startTime: 0, totalClicks: 0, startReactionTime: -1, forceSum: 0, frameCount: 0 }; }); updateGameReadyState(); }
+    function startRaceSequence() { prepareGameBoard(); if (startMode !== 'disabled') { document.addEventListener('keydown', handlePreGameKeyDown); preGameListenersActive = true; } startCountdown(3, 'Get Ready...'); }
+    function updatePreCountdownDisplay() { clearTimeout(preCountdownTimeout); const remaining = preCountdownEndTime - Date.now(); if (remaining <= 0) { countdownDisplay.textContent = 'Starting...'; preCountdownEndTime = 0; startRaceSequence(); } else { countdownDisplay.textContent = `Next race in ${Math.ceil(remaining / 1000)}...`; preCountdownTimeout = setTimeout(updatePreCountdownDisplay, 200); } }
+    function startAutomaticRematchCountdown() { if(document.hidden) return; logMessage("⏱️ Next race starts automatically in 5 seconds... Press 'New Game' to start sooner."); preCountdownEndTime = Date.now() + 5000; updatePreCountdownDisplay(); }
+    function cancelPreCountdown() { if (preCountdownEndTime > 0) { resetAllTimersAndLoops(); logMessage("🚦 Automatic rematch cancelled."); updateGameReadyState(); } }
+    function initGame() { if (activePlayers.length < 2) { logMessage("⚠️ At least two players must join to start a game."); return; } resetAllTimersAndLoops(); logList.innerHTML = '<li>🚀 New race started...</li>'; if (audioContext && audioContext.state === 'suspended') audioContext.resume(); startRaceSequence(); }
+    function startCountdown(duration, textPrefix) { let count = duration; countdownDisplay.textContent = `${textPrefix} ${count}`; playSound({ frequency: 330, duration: 0.15, type: 'sine' }); countdownInterval = setInterval(() => { count--; if (count > 0) { countdownDisplay.textContent = `${textPrefix} ${count}`; playSound({ frequency: 330, duration: 0.15, type: 'sine' }); } else { clearInterval(countdownInterval); countdownInterval = null; document.removeEventListener('keydown', handlePreGameKeyDown); preGameListenersActive = false; countdownDisplay.textContent = 'GO!'; playSound({ frequency: 523, duration: 0.3, type: 'square' }); goTime = performance.now(); if (startMode !== 'disabled') { document.addEventListener('keydown', handleGoKeyDown); setTimeout(() => { document.removeEventListener('keydown', handleGoKeyDown); startGame(); }, PERFECT_START_WINDOW_MS); } else { startGame(); } } }, 1000); }
+    function startGame() { if (startMode === 'two') { activePlayers.forEach(p => { if (p.startState === 'waiting' && p.goKey1Pressed && p.goKey2Pressed) { p.startState = 'boosted'; } }); } activePlayers.forEach(p => { p.raceStats.startTime = goTime; if (p.isBot && p.startState === 'waiting') { if (Math.random() * 100 < p.botSettings.perfectStartChance) { p.startState = 'boosted'; } } if (p.startState === 'boosted') { logMessage(`🚀 ${p.name} gets a PERFECT START!`); playSound({ frequency: 660, duration: 0.2, type: 'triangle', volume: 0.2 }); p.horseElement.classList.add('perfect-start-highlight'); const boostPixels = p.horseElement.clientWidth * startBoostMultiplier; p.position += boostPixels; } else if (p.startState === 'false_start') { p.isStalled = true; setTimeout(() => { p.isStalled = false; p.horseElement.style.opacity = '1'; logMessage(`👍 ${p.name} can now move!`); }, FALSE_START_STALL_MS); } }); logMessage(`📣🏁 The race has begun!`); gameActive = true; lastTime = 0; updateGameReadyState(); requestAnimationFrame(gameLoop); }
+    function updateBots(deltaTime) { let leadHumanPosition = -1; const humanPlayers = activePlayers.filter(p => !p.isBot); if (humanPlayers.length > 0) { leadHumanPosition = Math.max(...humanPlayers.map(p => p.position)); } activePlayers.forEach(bot => { if (!bot.isBot || !gameActive || bot.isStalled) return; const baseCPS = bot.botSettings.cps; let finalCPS = baseCPS; if (bot.botSettings.mode === 'rubberband' && leadHumanPosition !== -1) { const trackWidth = raceTrack.querySelector('.lane').clientWidth - 60; const distanceToLead = leadHumanPosition - bot.position; const adjustmentMultiplier = 1 - (distanceToLead / trackWidth) * 0.8; finalCPS = baseCPS * Math.max(0.5, Math.min(1.5, adjustmentMultiplier)); } const pressesThisFrame = finalCPS * deltaTime; const clicksForStats = Math.round(pressesThisFrame); bot.raceStats.totalClicks += clicksForStats; bot.force += pressesThisFrame * incrementPerTap; if (bot.force > 100) bot.force = 100; }); }
+    function gameLoop(currentTime) { if (!lastTime) lastTime = currentTime; const deltaTime = (currentTime - lastTime) / 1000; lastTime = currentTime; handleGamepadInput(currentTime); if (!gameActive) { requestAnimationFrame(gameLoop); return; } updateBots(deltaTime); activePlayers.forEach(p => { if (!p.isBot) { if (!p.lastCpsUpdateTime) p.lastCpsUpdateTime = currentTime; const timeSinceLastUpdate = currentTime - p.lastCpsUpdateTime; if (timeSinceLastUpdate >= CPS_UPDATE_INTERVAL_MS) { const timeDeltaSeconds = timeSinceLastUpdate / 1000; const cps = (p.clicks / timeDeltaSeconds).toFixed(1); p.cpsDisplayElement.textContent = `CPS: ${cps}`; p.clicks = 0; p.lastCpsUpdateTime = currentTime; } } p.raceStats.forceSum += p.force; p.raceStats.frameCount++; if (p.force > 0) { p.force -= drainRate * (deltaTime * 60); if (p.force < 0) p.force = 0; } if (!p.isStalled) { let currentSpeed = (p.force / 100) * MAX_SPEED; p.position += currentSpeed * deltaTime; } p.horseElement.style.transform = `translateX(${p.position}px) scaleX(-1)`; p.forceBarElement.style.height = `${p.force}%`; }); checkWinCondition(); requestAnimationFrame(gameLoop); }
+    function checkWinCondition() { if (!gameActive) return; if (activePlayers.length === 0) return; const trackWidth = raceTrack.querySelector('.lane').clientWidth - 60; const winner = activePlayers.find(p => p.position >= trackWidth); if (winner) endGame(winner); }
+    function endGame(winner) { resetAllTimersAndLoops(); winnerAnnEl.textContent = `${winner.name} Wins!`; winnerAnnEl.style.color = winner.color; logRaceStats(winner); updateWinsDisplay(); updateGameReadyState(); setTimeout(() => { if (!gameActive && preCountdownEndTime === 0 && !countdownInterval) { startAutomaticRematchCountdown(); } }, 3000); }
+    function logRaceStats(winner) { const endTime = performance.now(); const raceDuration = goTime > 0 ? (endTime - goTime) / 1000 : 0; let statsLogContent = `<strong>--- Race Over (Duration: ${raceDuration.toFixed(2)}s) ---</strong>\n`; const rankedPlayers = [...activePlayers].sort((a, b) => b.position - a.position); const rankEmojis = ['🏆', '🥈', '🥉', '4️⃣']; statsLogContent += `<strong>Rankings:</strong>\n`; rankedPlayers.forEach((p, index) => { statsLogContent += `${rankEmojis[index] || (index + 1) + '.'} ${p.name}\n`; }); statsLogContent += `\n<strong>=== Race Performance ===</strong>\n`; rankedPlayers.forEach((p, index) => { const isWinner = p.id === winner.id; const avgCPS = raceDuration > 0.1 ? (p.raceStats.totalClicks / raceDuration).toFixed(1) : '0.0'; const avgForce = p.raceStats.frameCount > 0 ? (p.raceStats.forceSum / p.raceStats.frameCount).toFixed(1) : '0.0'; p.sessionStats.racesPlayed++; if (isWinner) { p.sessionStats.wins++; p.sessionStats.winningStreak++; p.sessionStats.longestWinningStreak = Math.max(p.sessionStats.longestWinningStreak, p.sessionStats.winningStreak); p.sessionStats.bestRaceTime = Math.min(p.sessionStats.bestRaceTime, raceDuration); } else { p.sessionStats.winningStreak = 0; } p.sessionStats.bestAvgCPS = Math.max(p.sessionStats.bestAvgCPS, parseFloat(avgCPS) || 0); let reactionText; if (p.isBot) { reactionText = 'N/A (Bot)'; } else if (p.raceStats.startReactionTime === -2) { reactionText = 'False Start'; } else if (p.raceStats.startReactionTime === -1) { reactionText = 'No start detected'; } else { const reactionMs = p.raceStats.startReactionTime.toFixed(0); reactionText = `${reactionMs}ms`; p.sessionStats.bestReactionTime = Math.min(p.sessionStats.bestReactionTime, p.raceStats.startReactionTime); } statsLogContent += `\n<strong>${p.name} (#${index + 1}${isWinner ? ', WINNER' : ''})</strong>\n`; statsLogContent += `  - Avg CPS: ${avgCPS}\n`; statsLogContent += `  - Total Clicks: ${p.raceStats.totalClicks}\n`; statsLogContent += `  - Avg Force: ${avgForce}%\n`; statsLogContent += `  - Start Reaction: ${reactionText}\n`; }); statsLogContent += `\n<strong>=== Session Stats Summary ===</strong>\n`; activePlayers.forEach(p => { statsLogContent += `\n<strong>${p.name}</strong>\n`; statsLogContent += `  - Wins: ${p.sessionStats.wins} / ${p.sessionStats.racesPlayed} | Win Streak: ${p.sessionStats.winningStreak} (Best: ${p.sessionStats.longestWinningStreak})\n`; statsLogContent += `  - Best Race Time: ${p.sessionStats.bestRaceTime === Infinity ? 'N/A' : p.sessionStats.bestRaceTime.toFixed(2) + 's'}\n`; statsLogContent += `  - Best Avg CPS: ${p.sessionStats.bestAvgCPS.toFixed(1)}\n`; if (!p.isBot && p.sessionStats.allReactionTimes.length > 0) { const reactionStats = computeReactionStats(p.sessionStats.allReactionTimes); if (reactionStats) { statsLogContent += `  - Reactions (ms): Avg: ${reactionStats.average.toFixed(0)}, Best: ${reactionStats.fastest.toFixed(0)}, Worst: ${reactionStats.slowest.toFixed(0)}, SD: ${reactionStats.stdev.toFixed(1)}\n`; } } }); const li = document.createElement('li'); const pre = document.createElement('pre'); pre.style.margin = '0'; pre.style.whiteSpace = 'pre-wrap';  pre.style.fontFamily = 'inherit'; pre.innerHTML = statsLogContent; li.appendChild(pre); logList.appendChild(li); logContainer.scrollTop = logContainer.scrollHeight; }
 
     // --- Input Handling ---
     function handleKeyDown(e) {
         if (playerToChangeKey) return;
         if (e.key === 'h' || e.key === 'H') { e.preventDefault(); toggleHelpModal(); return; }
         if (e.key === 'Escape') { closeAllModals(); return; }
-        if (!gameActive) return;
+        
         const key = e.key.toLowerCase();
-        const player = activePlayers.find(p => !p.isBot && p.key === key);
-        if (player) {
-            e.preventDefault();
-            triggerPlayerTap(player);
-        }
-    }
-    function handleKeyUp(e) {
-        const key = e.key.toLowerCase();
-        const player = activePlayers.find(p => p.key === key);
-        if (player && !player.isBot) player.isKeyDown = false;
-    }
-    function handlePreGameKeyDown(e) {
-        const key = e.key.toLowerCase();
-        const player = activePlayers.find(p => !p.isBot && (p.key === key || p.key2 === key));
-        if (player && player.startState === 'waiting') {
-            if (falseStartPenalty === 'stall') {
-                player.startState = 'false_start';
-                player.raceStats.startReactionTime = -2;
-                logMessage(`💥 ${player.name} jumped the gun! (FALSE START)`);
-                playSound({ frequency: 220, duration: 0.3, type: 'sawtooth' });
-                player.horseElement.style.opacity = '0.4';
+        const inputId = `keyboard_${key}`;
+
+        if (assignedInputs.has(inputId)) {
+            if (!gameActive) return;
+            const player = activePlayers.find(p => !p.isBot && (p.key === key || p.key2 === key));
+            if (player) {
+                e.preventDefault();
+                triggerPlayerTap(player);
+            }
+        } else {
+            if (gameActive || activePlayers.length >= MAX_PLAYERS) return;
+
+            const canJoinWithThisKey = availablePlayers.some(p => p.key === key || p.key2 === key);
+            if (canJoinWithThisKey) {
+                handleJoinAttempt('keyboard', { key });
             }
         }
     }
-    function handleGoKeyDown(e) {
-        const key = e.key.toLowerCase();
-        const player = activePlayers.find(p => !p.isBot && (p.key === key || p.key2 === key));
-        if (!player || player.startState !== 'waiting') return;
-        if (player.raceStats.startReactionTime === -1) {
-            const reaction = performance.now() - goTime;
-            player.raceStats.startReactionTime = reaction;
-            player.sessionStats.allReactionTimes.push(reaction);
-        }
-        if (startMode === 'single' && key === player.key) {
-            player.startState = 'boosted';
-        } else if (startMode === 'two') {
-            if (key === player.key) player.goKey1Pressed = true;
-            if (key === player.key2) player.goKey2Pressed = true;
-        }
-    }
+    function handleKeyUp(e) { const key = e.key.toLowerCase(); const player = activePlayers.find(p => !p.isBot && (p.key === key || p.key2 === key)); if (player) player.isKeyDown = false; }
+    function handlePreGameKeyDown(e) { const key = e.key.toLowerCase(); const player = activePlayers.find(p => !p.isBot && (p.key === key || p.key2 === key)); if (player && player.startState === 'waiting') { if (falseStartPenalty === 'stall') { player.startState = 'false_start'; player.raceStats.startReactionTime = -2; logMessage(`💥 ${player.name} jumped the gun! (FALSE START)`); playSound({ frequency: 220, duration: 0.3, type: 'sawtooth' }); player.horseElement.style.opacity = '0.4'; } } }
+    function handleGoKeyDown(e) { const key = e.key.toLowerCase(); const player = activePlayers.find(p => !p.isBot && (p.key === key || p.key2 === key)); if (!player || player.startState !== 'waiting') return; if (player.raceStats.startReactionTime === -1) { const reaction = performance.now() - goTime; player.raceStats.startReactionTime = reaction; player.sessionStats.allReactionTimes.push(reaction); } if (startMode === 'single' && key === player.key) { player.startState = 'boosted'; } else if (startMode === 'two') { if (key === player.key) player.goKey1Pressed = true; if (key === player.key2) player.goKey2Pressed = true; } }
     
-    // REWRITTEN Gamepad Handling
     function handleGamepadInput(currentTime) {
         const polledPads = navigator.getGamepads ? navigator.getGamepads() : [];
 
-        // --- Phase 1: Gamepad Assignment ---
-        // Look for presses on unassigned gamepads to connect them to players.
         for (let i = 0; i < polledPads.length; i++) {
             const pad = polledPads[i];
-            // Skip if no pad exists or if it's already assigned.
-            if (!pad || assignedGamepadIndices.has(i)) continue;
+            if (!pad) continue;
 
+            const inputId = `gamepad_${i}`;
             const anyFaceButtonPressed = pad.buttons[0]?.pressed || pad.buttons[1]?.pressed || pad.buttons[2]?.pressed || pad.buttons[3]?.pressed;
 
-            if (anyFaceButtonPressed) {
-                // Find the first human player who doesn't have a gamepad yet.
-                const playerToAssign = activePlayers.find(p => !p.isBot && p.gamepadIndex === null);
+            if (assignedInputs.has(inputId)) {
+                // Gamepad is ASSIGNED
+                const player = activePlayers.find(p => p.gamepadIndex === i);
+                if (!player) continue;
 
-                if (playerToAssign) {
-                    playerToAssign.gamepadIndex = i;
-                    assignedGamepadIndices.add(i);
-                    updatePlayerControlTitle(playerToAssign);
-                    logMessage(`🎮 Gamepad ${i} connected to ${playerToAssign.name}.`);
-                    // Ensure this first press is processed by setting the 'last frame' state to false.
-                    playerToAssign.gamepadButtonPressedLastFrame = false;
+                if (anyFaceButtonPressed && !player.gamepadButtonPressedLastFrame) {
+                    if (preGameListenersActive && player.startState === 'waiting') {
+                        if (falseStartPenalty === 'stall') { player.startState = 'false_start'; player.raceStats.startReactionTime = -2; logMessage(`💥 ${player.name} jumped the gun! (GAMEPAD)`); playSound({ frequency: 220, duration: 0.3, type: 'sawtooth' }); player.horseElement.style.opacity = '0.4'; }
+                    } else if (goTime > 0 && currentTime - goTime < PERFECT_START_WINDOW_MS && player.startState === 'waiting') {
+                         if (player.raceStats.startReactionTime === -1) { const reaction = currentTime - goTime; player.raceStats.startReactionTime = reaction; player.sessionStats.allReactionTimes.push(reaction); }
+                        player.startState = 'boosted';
+                    } else if (gameActive) {
+                        triggerPlayerTap(player);
+                    }
+                }
+
+                if (!anyFaceButtonPressed && player.gamepadButtonPressedLastFrame) { player.isKeyDown = false; }
+                player.gamepadButtonPressedLastFrame = anyFaceButtonPressed;
+            } else {
+                // Gamepad is UNASSIGNED, check for join/connect
+                if (gameActive || activePlayers.length >= MAX_PLAYERS) continue;
+
+                const wasPressedLastFrame = lastGamepadButtonStates[i] && (lastGamepadButtonStates[i][0] || lastGamepadButtonStates[i][1] || lastGamepadButtonStates[i][2] || lastGamepadButtonStates[i][3]);
+                if (anyFaceButtonPressed && !wasPressedLastFrame) {
+                    handleJoinAttempt('gamepad', { index: i });
                 }
             }
+            lastGamepadButtonStates[i] = pad.buttons.map(b => b.pressed);
         }
-        
-        // --- Phase 2: Gameplay Input ---
-        // Process inputs for all players who have an assigned gamepad.
-        activePlayers.forEach(player => {
-            if (player.isBot || player.gamepadIndex === null) {
-                player.gamepadButtonPressedLastFrame = false; // Reset state for players without a gamepad.
-                return;
-            }
-
-            const pad = polledPads[player.gamepadIndex];
-            if (!pad) return; // This can happen if the pad disconnects mid-frame.
-
-            const anyFaceButtonPressed = pad.buttons[0]?.pressed || pad.buttons[1]?.pressed || pad.buttons[2]?.pressed || pad.buttons[3]?.pressed;
-            
-            // Check for a new press (was not pressed last frame, is pressed now).
-            if (anyFaceButtonPressed && !player.gamepadButtonPressedLastFrame) {
-                if (preGameListenersActive && player.startState === 'waiting') {
-                    if (falseStartPenalty === 'stall') {
-                        player.startState = 'false_start';
-                        player.raceStats.startReactionTime = -2;
-                        logMessage(`💥 ${player.name} jumped the gun! (GAMEPAD FALSE START)`);
-                        playSound({ frequency: 220, duration: 0.3, type: 'sawtooth' });
-                        player.horseElement.style.opacity = '0.4';
-                    }
-                }
-                else if (goTime > 0 && currentTime - goTime < PERFECT_START_WINDOW_MS && player.startState === 'waiting') {
-                     if (player.raceStats.startReactionTime === -1) {
-                        const reaction = currentTime - goTime;
-                        player.raceStats.startReactionTime = reaction;
-                        player.sessionStats.allReactionTimes.push(reaction);
-                    }
-                    player.startState = 'boosted';
-                }
-                else if (gameActive) {
-                    triggerPlayerTap(player);
-                }
-            }
-
-            // Handle button release.
-            if (!anyFaceButtonPressed && player.gamepadButtonPressedLastFrame) {
-                player.isKeyDown = false;
-            }
-
-            // Update state for the next frame.
-            player.gamepadButtonPressedLastFrame = anyFaceButtonPressed;
-        });
     }
 
     // --- UI & Modals ---
-    // NEW: Centralized function to update the player's title in the control box.
-    function updatePlayerControlTitle(player) {
-        if (!player || !player.controlsTitleElement) return;
-        const type = player.isBot ? '(BOT)' : `(${player.keyDisplay})`;
-        const gamepad = player.gamepadIndex !== null ? ` [GP ${player.gamepadIndex}]` : '';
-        player.controlsTitleElement.innerHTML = `${player.name} ${type}${gamepad}`;
-    }
-
-    function updatePlayerBotStateUI(player) {
-        player.keyConfigContainer.classList.toggle('hidden', player.isBot);
-        player.botSettingsContainer.classList.toggle('hidden', !player.isBot);
-        player.controlsElement.classList.toggle('is-bot', player.isBot);
-        player.cpsDisplayElement.classList.toggle('hidden', player.isBot);
-        updatePlayerControlTitle(player); // Use centralized function
-    }
+    function updatePlayerControlTitle(player) { if (!player || !player.controlsTitleElement) return; const type = player.isBot ? '(BOT)' : `(${player.keyDisplay})`; const gamepad = player.gamepadIndex !== null ? ` [GP ${player.gamepadIndex}]` : ''; player.controlsTitleElement.innerHTML = `${player.name} ${type}${gamepad}`; }
+    function updatePlayerBotStateUI(player) { player.keyConfigContainer.classList.toggle('hidden', player.isBot); player.botSettingsContainer.classList.toggle('hidden', !player.isBot); player.controlsElement.classList.toggle('is-bot', player.isBot); player.cpsDisplayElement.classList.toggle('hidden', player.isBot); updatePlayerControlTitle(player); }
     function handleCustomizeInteraction(e) {
         const target = e.target;
         const playerSection = target.closest('.customize-player-section');
         if (!playerSection) return;
         const player = activePlayers.find(p => p.id === playerSection.dataset.playerId);
         if (!player) return;
-        if (target.matches('.vehicle-btn')) {
-            player.sprite = target.dataset.vehicle;
-            player.horseElement.innerHTML = target.dataset.vehicle;
-        } else if (target.matches('.change-key-btn') && !playerToChangeKey) {
-            startKeyChange(target);
-        }
+        if (target.matches('.vehicle-btn')) { player.sprite = target.dataset.vehicle; player.horseElement.innerHTML = target.dataset.vehicle; } 
+        else if (target.matches('.change-key-btn') && !playerToChangeKey) { startKeyChange(target); } 
         else if (target.matches('.enable-bot-checkbox')) {
             player.isBot = target.checked;
+            // When a player becomes a bot, free their controls.
+            if (player.isBot) {
+                assignedInputs.delete(`keyboard_${player.key}`);
+                assignedInputs.delete(`keyboard_${player.key2}`);
+                if (player.gamepadIndex !== null) {
+                    assignedInputs.delete(`gamepad_${player.gamepadIndex}`);
+                    logMessage(`🎮 Gamepad ${player.gamepadIndex} freed from Bot ${player.name}.`);
+                    player.gamepadIndex = null;
+                }
+            }
             updatePlayerBotStateUI(player);
-        } else if (target.matches('.ai-mode-select')) {
-            player.botSettings.mode = target.value;
-        }
+        } else if (target.matches('.ai-mode-select')) { player.botSettings.mode = target.value; }
     }
-    function startKeyChange(button) {
-        playerToChangeKey = activePlayers.find(p => p.id === button.dataset.playerId);
-        keyToChangeIndex = parseInt(button.dataset.keyIndex);
-        button.textContent = 'Press key...';
-        button.classList.add('is-listening');
-        document.addEventListener('keydown', handleKeySelection, { once: true });
-    }
-    function getKeyDisplay(e) {
-        if (e.key === ' ') return 'Space';
-        if (e.key.includes('Arrow')) return e.key.replace('Arrow', '') + ' Arrow';
-        return e.key.length === 1 ? e.key.toUpperCase() : e.key;
-    }
-    function handleKeySelection(e) {
-        e.preventDefault();
-        const newKey = e.key.toLowerCase();
-        const newKeyDisplay = getKeyDisplay(e);
-        const isKeyInUse = activePlayers.some(p => (p.key === newKey || p.key2 === newKey) && p.id !== playerToChangeKey.id);
-        if (isKeyInUse) {
-            alert(`Key "${newKeyDisplay}" is already in use.`);
-        } else {
-            if (keyToChangeIndex === 1) {
-                playerToChangeKey.key = newKey;
-                playerToChangeKey.keyDisplay = newKeyDisplay;
-                playerToChangeKey.keyDisplayElement1.textContent = newKeyDisplay;
-            } else {
-                playerToChangeKey.key2 = newKey;
-                playerToChangeKey.key2Display = newKeyDisplay;
-                playerToChangeKey.keyDisplayElement2.textContent = newKeyDisplay;
-            }
-            updatePlayerControlTitle(playerToChangeKey); // Use centralized function
-        }
-        const button = playerToChangeKey.customizeElement.querySelector(`.change-key-btn[data-key-index="${keyToChangeIndex}"]`);
-        button.textContent = 'Change';
-        button.classList.remove('is-listening');
-        playerToChangeKey = null;
-    }
-    function openModal(modal) {
-        cancelPreCountdown();
-        modalOverlay.classList.remove('hidden');
-        modal.classList.remove('hidden');
-    }
-    function closeAllModals() {
-        if (playerToChangeKey) {
-            const button = playerToChangeKey.customizeElement.querySelector('.is-listening');
-            if (button) { button.textContent = 'Change'; button.classList.remove('is-listening'); }
-            playerToChangeKey = null;
-            document.removeEventListener('keydown', handleKeySelection);
-        }
-        modalOverlay.classList.add('hidden');
-        customizeModal.classList.add('hidden');
-        helpModal.classList.add('hidden');
-    }
+    function startKeyChange(button) { playerToChangeKey = activePlayers.find(p => p.id === button.dataset.playerId); keyToChangeIndex = parseInt(button.dataset.keyIndex); button.textContent = 'Press key...'; button.classList.add('is-listening'); document.addEventListener('keydown', handleKeySelection, { once: true }); }
+    function getKeyDisplay(e) { if (e.key === ' ') return 'Space'; if (e.key.includes('Arrow')) return e.key.replace('Arrow', '') + ' Arrow'; return e.key.length === 1 ? e.key.toUpperCase() : e.key; }
+    function handleKeySelection(e) { e.preventDefault(); const newKey = e.key.toLowerCase(); const newKeyDisplay = getKeyDisplay(e); const isKeyInUse = activePlayers.some(p => (p.key === newKey || p.key2 === newKey) && p.id !== playerToChangeKey.id); if (isKeyInUse) { alert(`Key "${newKeyDisplay}" is already in use.`); } else { if (keyToChangeIndex === 1) { playerToChangeKey.key = newKey; playerToChangeKey.keyDisplay = newKeyDisplay; playerToChangeKey.keyDisplayElement1.textContent = newKeyDisplay; } else { playerToChangeKey.key2 = newKey; playerToChangeKey.key2Display = newKeyDisplay; playerToChangeKey.keyDisplayElement2.textContent = newKeyDisplay; } updatePlayerControlTitle(playerToChangeKey); } const button = playerToChangeKey.customizeElement.querySelector(`.change-key-btn[data-key-index="${keyToChangeIndex}"]`); button.textContent = 'Change'; button.classList.remove('is-listening'); playerToChangeKey = null; }
+    function openModal(modal) { cancelPreCountdown(); modalOverlay.classList.remove('hidden'); modal.classList.remove('hidden'); }
+    function closeAllModals() { if (playerToChangeKey) { const button = playerToChangeKey.customizeElement.querySelector('.is-listening'); if (button) { button.textContent = 'Change'; button.classList.remove('is-listening'); } playerToChangeKey = null; document.removeEventListener('keydown', handleKeySelection); } modalOverlay.classList.add('hidden'); customizeModal.classList.add('hidden'); helpModal.classList.add('hidden'); }
     function openCustomizeModal() { openModal(customizeModal); }
-    function toggleHelpModal() {
-        if (helpModal.classList.contains('hidden')) {
-            helpControlsList.innerHTML = '';
-            if (activePlayers.length > 0) {
-                activePlayers.forEach(p => {
-                    const item = document.createElement('div');
-                    item.className = 'help-control-item';
-                    let keysHTML;
-                    if (p.isBot) {
-                        keysHTML = `<p>${p.name}: <span class="key">BOT</span></p>`;
-                    } else {
-                        let kbdKeys = `<span class="key">${p.keyDisplay}</span>`;
-                        if (startMode === 'two') { kbdKeys += `<span class="key">${p.key2Display}</span>`; }
-                        // NEW: Add gamepad connection status to help modal
-                        const gamepadInfo = p.gamepadIndex !== null ? ` (Connected to GP ${p.gamepadIndex})` : ` (or any Face Button on an available Gamepad)`;
-                        keysHTML = `<p>${p.name}: ${kbdKeys} or <span class="key">Gamepad</span>${gamepadInfo}</p>`;
-                    }
-                    item.innerHTML = keysHTML;
-                    item.style.borderColor = p.color;
-                    helpControlsList.appendChild(item);
-                });
-            } else {
-                helpControlsList.innerHTML = '<p>No players have been added yet.</p>';
-            }
-            openModal(helpModal);
-        } else {
-            closeAllModals();
-        }
-    }
-    function updateKeyConfigVisibility() {
-        document.querySelectorAll('.key-config-area[data-key-index="2"]').forEach(el => {
-            el.classList.toggle('hidden', startMode !== 'two');
-        });
-    }
-    function logMessage(message) {
-        const li = document.createElement('li');
-        li.textContent = message;
-        logList.appendChild(li);
-        logContainer.scrollTop = logContainer.scrollHeight;
-    }
-    function updateWinsDisplay() {
-        activePlayers.forEach(p => { p.winsElement.textContent = `Wins: ${p.sessionStats.wins}`; });
-    }
+    function toggleHelpModal() { if (helpModal.classList.contains('hidden')) { helpControlsList.innerHTML = ''; if (activePlayers.length > 0) { activePlayers.forEach(p => { const item = document.createElement('div'); item.className = 'help-control-item'; let keysHTML; if (p.isBot) { keysHTML = `<p>${p.name}: <span class="key">BOT</span></p>`; } else { let kbdKeys = `<span class="key">${p.keyDisplay}</span>`; if (startMode === 'two') { kbdKeys += `<span class="key">${p.key2Display}</span>`; } const gamepadInfo = p.gamepadIndex !== null ? ` (Connected to GP ${p.gamepadIndex})` : ``; keysHTML = `<p>${p.name}: ${kbdKeys} or <span class="key">Gamepad</span>${gamepadInfo}</p>`; } item.innerHTML = keysHTML; item.style.borderColor = p.color; helpControlsList.appendChild(item); }); } else { helpControlsList.innerHTML = '<p>No players have been added yet.</p>'; } openModal(helpModal); } else { closeAllModals(); } }
+    function updateKeyConfigVisibility() { document.querySelectorAll('.key-config-area[data-key-index="2"]').forEach(el => { el.classList.toggle('hidden', startMode !== 'two'); }); }
+    function logMessage(message) { const li = document.createElement('li'); li.textContent = message; logList.appendChild(li); logContainer.scrollTop = logContainer.scrollHeight; }
+    function updateWinsDisplay() { activePlayers.forEach(p => { p.winsElement.textContent = `Wins: ${p.sessionStats.wins}`; }); }
 
     // --- Event Listeners ---
     document.addEventListener('keydown', handleKeyDown);
     document.addEventListener('keyup', handleKeyUp);
     newGameButton.addEventListener('click', initGame);
-    addPlayerButton.addEventListener('click', addPlayer);
+    addPlayerButton.addEventListener('click', addPlayer); // RESTORED
     customizeToggleButton.addEventListener('click', openCustomizeModal);
     closeCustomizeModalButton.addEventListener('click', closeAllModals);
     customizeModal.addEventListener('click', handleCustomizeInteraction);
-    customizeModal.addEventListener('input', (e) => {
-        const target = e.target;
-        const playerSection = target.closest('.customize-player-section');
-        if (!playerSection) return;
-        const player = activePlayers.find(p => p.id === playerSection.dataset.playerId);
-        if (!player) return;
-        const parentGroup = target.closest('.settings-group');
-        if (!parentGroup) return;
-        if (target.matches('.bot-cps-slider')) {
-            const newValue = parseFloat(target.value);
-            player.botSettings.cps = newValue;
-            const inputField = parentGroup.querySelector('.bot-cps-input');
-            if (inputField) inputField.value = newValue.toFixed(1);
-        } else if (target.matches('.bot-cps-input')) {
-            const newValue = parseFloat(target.value);
-            const slider = parentGroup.querySelector('.bot-cps-slider');
-            if (slider) slider.value = newValue;
-        } else if (target.matches('.perfect-start-chance-slider')) {
-            player.botSettings.perfectStartChance = parseInt(target.value);
-            player.customizeElement.querySelector('.perfect-start-chance-display').textContent = target.value;
-        }
-    });
-    function applyBotCpsValue(inputElement) {
-        const playerSection = inputElement.closest('.customize-player-section');
-        if (!playerSection) return;
-        const player = activePlayers.find(p => p.id === playerSection.dataset.playerId);
-        if (!player) return;
-        let newValue = parseFloat(inputElement.value);
-        const min = parseFloat(inputElement.min);
-        const max = parseFloat(inputElement.max);
-        if (isNaN(newValue)) newValue = player.botSettings.cps;
-        newValue = Math.max(min, Math.min(max, newValue));
-        player.botSettings.cps = newValue;
-        inputElement.value = newValue.toFixed(1);
-        const slider = inputElement.closest('.settings-group').querySelector('.bot-cps-slider');
-        if (slider) slider.value = newValue;
-    }
-    customizeModal.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && e.target.matches('.bot-cps-input')) {
-            e.preventDefault();
-            applyBotCpsValue(e.target);
-            e.target.blur();
-        }
-    });
-    customizeModal.addEventListener('focusout', (e) => {
-        if (e.target.matches('.bot-cps-input')) {
-            applyBotCpsValue(e.target);
-        }
-    });
+    customizeModal.addEventListener('input', (e) => { const target = e.target; const playerSection = target.closest('.customize-player-section'); if (!playerSection) return; const player = activePlayers.find(p => p.id === playerSection.dataset.playerId); if (!player) return; const parentGroup = target.closest('.settings-group'); if (!parentGroup) return; if (target.matches('.bot-cps-slider')) { const newValue = parseFloat(target.value); player.botSettings.cps = newValue; const inputField = parentGroup.querySelector('.bot-cps-input'); if (inputField) inputField.value = newValue.toFixed(1); } else if (target.matches('.bot-cps-input')) { const newValue = parseFloat(target.value); const slider = parentGroup.querySelector('.bot-cps-slider'); if (slider) slider.value = newValue; } else if (target.matches('.perfect-start-chance-slider')) { player.botSettings.perfectStartChance = parseInt(target.value); player.customizeElement.querySelector('.perfect-start-chance-display').textContent = target.value; } });
+    function applyBotCpsValue(inputElement) { const playerSection = inputElement.closest('.customize-player-section'); if (!playerSection) return; const player = activePlayers.find(p => p.id === playerSection.dataset.playerId); if (!player) return; let newValue = parseFloat(inputElement.value); const min = parseFloat(inputElement.min); const max = parseFloat(inputElement.max); if (isNaN(newValue)) newValue = player.botSettings.cps; newValue = Math.max(min, Math.min(max, newValue)); player.botSettings.cps = newValue; inputElement.value = newValue.toFixed(1); const slider = inputElement.closest('.settings-group').querySelector('.bot-cps-slider'); if (slider) slider.value = newValue; }
+    customizeModal.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.matches('.bot-cps-input')) { e.preventDefault(); applyBotCpsValue(e.target); e.target.blur(); } });
+    customizeModal.addEventListener('focusout', (e) => { if (e.target.matches('.bot-cps-input')) { applyBotCpsValue(e.target); } });
     closeHelpButton.addEventListener('click', closeAllModals);
     modalOverlay.addEventListener('click', closeAllModals);
     helpPrompt.addEventListener('click', toggleHelpModal);
-    difficultyRadios.forEach(radio => radio.addEventListener('change', (e) => {
-        currentDifficulty = e.target.value;
-        updateGameParameters();
-    }));
-    function handleManualControlChange() {
-        const manualRadio = document.querySelector('input[name="difficulty"][value="manual"]');
-        if (manualRadio && !manualRadio.checked) {
-            manualRadio.checked = true;
-            currentDifficulty = 'manual';
-        }
-        updateGameParameters();
-    }
+    difficultyRadios.forEach(radio => radio.addEventListener('change', (e) => { currentDifficulty = e.target.value; updateGameParameters(); }));
+    function handleManualControlChange() { const manualRadio = document.querySelector('input[name="difficulty"][value="manual"]'); if (manualRadio && !manualRadio.checked) { manualRadio.checked = true; currentDifficulty = 'manual'; } updateGameParameters(); }
     incrementSlider.addEventListener('input', handleManualControlChange);
     drainRateSlider.addEventListener('input', handleManualControlChange);
     startModeSelect.addEventListener('change', handleManualControlChange);
     boostSlider.addEventListener('input', handleManualControlChange);
     falseStartPenaltySelect.addEventListener('change', handleManualControlChange);
-    document.addEventListener('visibilitychange', () => {
-        if (document.hidden) {
-            clearTimeout(preCountdownTimeout);
-        } else {
-            if (preCountdownEndTime > Date.now()) {
-                updatePreCountdownDisplay();
-            } else {
-                if (winnerAnnEl.textContent !== '' && !gameActive && preCountdownEndTime === 0 && !countdownInterval) {
-                    startAutomaticRematchCountdown();
-                }
-            }
-        }
-    });
-    window.addEventListener("gamepadconnected", (e) => {
-        console.log(`Gamepad connected at index ${e.gamepad.index}: ${e.gamepad.id}.`);
-        gamepads[e.gamepad.index] = e.gamepad;
-    });
-    // UPDATED gamepad disconnect handler
+    document.addEventListener('visibilitychange', () => { if (document.hidden) { clearTimeout(preCountdownTimeout); } else { if (preCountdownEndTime > Date.now()) { updatePreCountdownDisplay(); } else { if (winnerAnnEl.textContent !== '' && !gameActive && preCountdownEndTime === 0 && !countdownInterval) { startAutomaticRematchCountdown(); } } } });
+    window.addEventListener("gamepadconnected", (e) => { console.log(`Gamepad connected at index ${e.gamepad.index}: ${e.gamepad.id}.`); gamepads[e.gamepad.index] = e.gamepad; });
     window.addEventListener("gamepaddisconnected", (e) => {
         const disconnectedIndex = e.gamepad.index;
         console.log(`Gamepad disconnected from index ${disconnectedIndex}: ${e.gamepad.id}.`);
         delete gamepads[disconnectedIndex];
-
         const player = activePlayers.find(p => p.gamepadIndex === disconnectedIndex);
-        if (player) {
-            logMessage(`🎮 Gamepad ${disconnectedIndex} disconnected from ${player.name}.`);
-            player.gamepadIndex = null;
-            player.gamepadButtonPressedLastFrame = false; // Reset state
-            updatePlayerControlTitle(player);
-        }
-        assignedGamepadIndices.delete(disconnectedIndex);
+        if (player) { logMessage(`🎮 Gamepad ${disconnectedIndex} disconnected from ${player.name}.`); player.gamepadIndex = null; player.gamepadButtonPressedLastFrame = false; updatePlayerControlTitle(player); }
+        assignedInputs.delete(`gamepad_${disconnectedIndex}`);
     });
 
-
     // --- Initializations ---
-    function initializeDefaultPlayers() {
-        if (availablePlayers.length >= 2) {
-            createPlayer(availablePlayers[0]);
-            createPlayer(availablePlayers[1]);
-        }
-    }
     initAudio();
     volumeSlider.value = masterVolume;
     updateMuteButtonUI();
-    initializeDefaultPlayers();
     updateGameParameters();
-    populatePlayerDropdown();
+    populatePlayerDropdown(); // Call this on startup
     updateGridLayout();
     updateGameReadyState();
-    logMessage("Welcome! Press a face button on a controller to connect it to a player.");
+    logMessage("Welcome! Add players manually or press a key/gamepad button to join.");
     requestAnimationFrame(gameLoop);
 });

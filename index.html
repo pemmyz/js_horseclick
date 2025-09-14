@@ -13,6 +13,7 @@
     <div id="game-container">
         <div class="top-bar">
             <h1>Hevoskisat Clicker Challenge</h1>
+            <!-- [MODIFIED] Player management UI is RESTORED -->
             <div id="player-management">
                 <select id="player-select"></select>
                 <button id="add-player-button">Add Player</button>
@@ -34,7 +35,7 @@
         </div>
 
         <div id="winner-announcement"></div>
-        <div id="countdown-display">Add a player to begin!</div>
+        <div id="countdown-display">Add a player or press a key (W/Up Arrow) or Gamepad button to Join!</div>
 
         <div id="race-track">
             <!-- Player lanes will be added here by JS -->
@@ -50,6 +51,8 @@
         </div>
     </div>
 
+    <!-- ... (rest of the HTML is the same as the previous version) ... -->
+    
     <!-- Modal Overlay (shared by all modals) -->
     <div id="modal-overlay" class="hidden"></div>
 
@@ -103,18 +106,25 @@
             <h2>How to Play</h2>
             <h3>Goal</h3>
             <p>Be the first player to get your vehicle across the finish line! 🏁</p>
+            <h3>Joining the Game</h3>
+            <p>
+                <ul>
+                    <li><strong>Human Players:</strong> To join, simply press one of the default keyboard controls (<strong>W, Up Arrow, etc.</strong>) or any face button (<strong>A,B,X,Y / X,O,□,△</strong>) on a connected gamepad. The first available player slot will be assigned to you.</li>
+                    <li><strong>AI Players:</strong> Use the "Add Player" button to add a player slot. Then, go to the "Customize" menu (⚙️) to enable the "Bot AI" for that player.</li>
+                </ul>
+            </p>
 
             <h3>Starting the Race</h3>
             <p>A good start is crucial! After the countdown, the "GO!" signal will appear.
                 <ul>
-                    <li><strong>Perfect Start:</strong> Press your key(s) or any Gamepad face button (A,B,X,Y) right as "GO!" appears to get a starting boost.</li>
+                    <li><strong>Perfect Start:</strong> Press your key(s) or any Gamepad face button right as "GO!" appears to get a starting boost.</li>
                     <li><strong>False Start:</strong> Pressing your key or button before "GO!" will cause you to stall for a moment after the race begins.</li>
                     <li><strong>Start Modes:</strong> You can choose between a single-button or two-button start for keyboard players in the advanced settings.</li>
                 </ul>
             </p>
 
             <h3>Gameplay</h3>
-            <p>Tap your assigned key(s), click your control area with the mouse, or tap any face button on a gamepad to build force. The more force you have, the faster you move. But be careful, force drains over time!</p>
+            <p>Tap your assigned key(s), click your control area with the mouse, or tap any face button on your assigned gamepad to build force. The more force you have, the faster you move. But be careful, force drains over time!</p>
             <h3>Active Player Controls</h3>
             <div id="help-controls-list">
                 <!-- Player controls will be listed here by JS -->
