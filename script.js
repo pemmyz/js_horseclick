@@ -47,9 +47,10 @@ document.addEventListener('DOMContentLoaded', () => {
         medium: { increment: 12, drainRate: 0.4, drainSlider: 4 },
         hard:   { increment: 8,  drainRate: 0.7, drainSlider: 7 }
     };
+    // [MODIFIED] Updated key assignments for Player 1 and Player 2
     const availablePlayers = [
-        { id: 'p1', name: 'Player 1', key: 'w', keyDisplay: 'W', key2: 'e', key2Display: 'E', color: '#ff8a65' },
-        { id: 'p2', name: 'Player 2', key: 'arrowup', keyDisplay: 'Up Arrow', key2: 'arrowdown', key2Display: 'Down Arrow', color: '#64b5f6' },
+        { id: 'p1', name: 'Player 1', key: 'a', keyDisplay: 'A', key2: 'd', key2Display: 'D', color: '#ff8a65' },
+        { id: 'p2', name: 'Player 2', key: 'arrowleft', keyDisplay: 'Left Arrow', key2: 'arrowright', key2Display: 'Right Arrow', color: '#64b5f6' },
         { id: 'p3', name: 'Player 3', key: 'l', keyDisplay: 'L', key2: 'k', key2Display: 'K', color: '#81c784' },
         { id: 'p4', name: 'Player 4', key: 'p', keyDisplay: 'P', key2: 'o', key2Display: 'O', color: '#ffd54f' }
     ];
@@ -69,7 +70,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let countdownInterval;
     let playerToChangeKey = null;
     let keyToChangeIndex = 1;
-    let startMode = 'single';
+    let startMode = 'single'; 
     let startBoostMultiplier = 1.0;
     let falseStartPenalty = 'stall';
     let preGameListenersActive = false;
@@ -108,7 +109,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!autoStartEndTime) return;
         const remainingSeconds = Math.ceil((autoStartEndTime - Date.now()) / 1000);
         if (remainingSeconds > 0) {
-            countdownDisplay.classList.remove('message-mode'); // [FIX] Use number styling
+            countdownDisplay.classList.remove('message-mode');
             countdownDisplay.textContent = `Game starting in ${remainingSeconds}...`;
         }
     }
@@ -161,6 +162,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         if (inputType === 'keyboard') {
             const key = details.key;
+            // The logic to find the player config for a given key remains correct
             const configForKey = availablePlayers.find(p => p.key === key || p.key2 === key);
             if (!configForKey || activePlayers.some(p => p.id === configForKey.id)) return;
             playerConfigToJoin = availablePlayers[activePlayers.length];
@@ -308,7 +310,7 @@ document.addEventListener('DOMContentLoaded', () => {
             cpsDisplayElement: controlGroup.querySelector('.cps-display'),
             clicks: 0, lastCpsUpdateTime: 0,
             startState: 'waiting', isStalled: false,
-            goKey1Pressed: false, goKey2Pressed: false,
+            goKey1Pressed: false, goKey2Pressed: false, 
             gamepadButtonPressedLastFrame: false,
             isBot: false,
             botSettings: { mode: 'static', cps: 8.8, perfectStartChance: 50 },
@@ -350,7 +352,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function updateGameReadyState() {
         if (autoStartCountdownId || gameActive || preCountdownEndTime > 0 || countdownInterval) return;
         
-        countdownDisplay.classList.add('message-mode'); // [FIX] Use message styling
+        countdownDisplay.classList.add('message-mode');
         if (activePlayers.length === 0) {
             countdownDisplay.textContent = 'Add a player or press a key to Join!';
             newGameButton.disabled = true;
@@ -363,10 +365,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- Stats Helper (Unchanged) ---
     function computeReactionStats(reactionTimes) { if (reactionTimes.length === 0) return null; const fastest = Math.min(...reactionTimes); const slowest = Math.max(...reactionTimes); const average = reactionTimes.reduce((a, b) => a + b, 0) / reactionTimes.length; let stdev = 0; if (reactionTimes.length > 1) { const mean = average; const diffs = reactionTimes.map(rt => (rt - mean) ** 2); stdev = Math.sqrt(diffs.reduce((a, b) => a + b, 0) / (reactionTimes.length - 1)); } return { fastest, slowest, average, stdev }; }
     
-    // --- Game Logic & Flow ---
     function resetAllTimersAndLoops() { gameActive = false; clearTimeout(preCountdownTimeout); preCountdownTimeout = null; preCountdownEndTime = 0; clearInterval(countdownInterval); countdownInterval = null; document.removeEventListener('keydown', handlePreGameKeyDown); document.removeEventListener('keydown', handleGoKeyDown); preGameListenersActive = false; }
     function updateGameParameters() { if (currentDifficulty === 'manual') { incrementPerTap = parseInt(incrementSlider.value); drainRate = parseFloat(drainRateSlider.value) / 10; } else { const settings = difficultySettings[currentDifficulty]; incrementPerTap = settings.increment; drainRate = settings.drainRate; incrementSlider.value = incrementPerTap; drainRateSlider.value = settings.drainSlider; } incrementValueDisplay.textContent = incrementSlider.value; drainRateValueDisplay.textContent = (parseFloat(drainRateSlider.value) / 10).toFixed(1); startMode = startModeSelect.value; startBoostMultiplier = parseFloat(boostSlider.value) / 10; boostValueDisplay.textContent = startBoostMultiplier.toFixed(1); falseStartPenalty = falseStartPenaltySelect.value; const startSystemDisabled = startMode === 'disabled'; boostSliderGroup.classList.toggle('hidden', startSystemDisabled); falseStartPenaltyGroup.classList.toggle('hidden', startSystemDisabled); updateKeyConfigVisibility(); }
     function prepareGameBoard() { updateGameParameters(); winnerAnnEl.innerHTML = ''; winnerAnnEl.className = ''; activePlayers.forEach(p => { p.horseElement.innerHTML = p.sprite; p.horseElement.style.transform = `translateX(0px) scaleX(-1)`; p.horseElement.style.opacity = '1'; p.horseElement.classList.remove('perfect-start-highlight'); p.forceBarElement.style.height = '0%'; p.position = 0; p.force = 0; p.startState = 'waiting'; p.isStalled = false; p.goKey1Pressed = false; p.goKey2Pressed = false; p.gamepadButtonPressedLastFrame = false; p.clicks = 0; p.lastCpsUpdateTime = 0; if (p.cpsDisplayElement) p.cpsDisplayElement.textContent = 'CPS: 0.0'; p.raceStats = { startTime: 0, totalClicks: 0, startReactionTime: -1, forceSum: 0, frameCount: 0 }; }); updateGameReadyState(); }
@@ -383,7 +383,7 @@ document.addEventListener('DOMContentLoaded', () => {
         startRaceSequence();
     }
     function startCountdown(duration, textPrefix) {
-        countdownDisplay.classList.remove('message-mode'); // [FIX] Use number styling
+        countdownDisplay.classList.remove('message-mode');
         let count = duration;
         countdownDisplay.textContent = `${textPrefix} ${count}`;
         playSound({ frequency: 330, duration: 0.15, type: 'sine' });
@@ -428,7 +428,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const anyFaceButtonPressed = pad.buttons[0]?.pressed || pad.buttons[1]?.pressed || pad.buttons[2]?.pressed || pad.buttons[3]?.pressed;
 
             if (assignedInputs.has(inputId)) {
-                // Gamepad is ASSIGNED
                 const player = activePlayers.find(p => p.gamepadIndex === i);
                 if (!player || player.isBot) continue;
 
@@ -446,7 +445,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (!anyFaceButtonPressed && player.gamepadButtonPressedLastFrame) { player.isKeyDown = false; }
                 player.gamepadButtonPressedLastFrame = anyFaceButtonPressed;
             } else {
-                // Gamepad is UNASSIGNED
                 const wasPressedLastFrame = lastGamepadButtonStates[i] && (lastGamepadButtonStates[i][0] || lastGamepadButtonStates[i][1] || lastGamepadButtonStates[i][2] || lastGamepadButtonStates[i][3]);
                 if (anyFaceButtonPressed && !wasPressedLastFrame) {
                     handleJoinAttempt('gamepad', { index: i });
@@ -463,7 +461,12 @@ document.addEventListener('DOMContentLoaded', () => {
         let controlInfo;
         switch (player.controllerType) {
             case 'keyboard':
-                controlInfo = `(${player.keyDisplay})`;
+                // The logic to display keys is already correct for both modes
+                controlInfo = `(${player.keyDisplay}`;
+                if (startMode === 'two') {
+                    controlInfo += ` / ${player.key2Display}`;
+                }
+                controlInfo += ')';
                 break;
             case 'gamepad':
                 controlInfo = `(GP ${player.gamepadIndex})`;
@@ -518,9 +521,9 @@ document.addEventListener('DOMContentLoaded', () => {
             player.botSettings.mode = target.value;
         }
     }
-    function startKeyChange(button) { playerToChangeKey = activePlayers.find(p => p.id === button.dataset.playerId); keyToChangeKey = parseInt(button.dataset.keyIndex); button.textContent = 'Press key...'; button.classList.add('is-listening'); document.addEventListener('keydown', handleKeySelection, { once: true }); }
+    function startKeyChange(button) { playerToChangeKey = activePlayers.find(p => p.id === button.dataset.playerId); keyToChangeIndex = parseInt(button.dataset.keyIndex); button.textContent = 'Press key...'; button.classList.add('is-listening'); document.addEventListener('keydown', handleKeySelection, { once: true }); }
     function getKeyDisplay(e) { if (e.key === ' ') return 'Space'; if (e.key.includes('Arrow')) return e.key.replace('Arrow', '') + ' Arrow'; return e.key.length === 1 ? e.key.toUpperCase() : e.key; }
-    function handleKeySelection(e) { e.preventDefault(); const newKey = e.key.toLowerCase(); const newKeyDisplay = getKeyDisplay(e); const isKeyInUse = activePlayers.some(p => (p.key === newKey || p.key2 === newKey) && p.id !== playerToChangeKey.id); if (isKeyInUse) { alert(`Key "${newKeyDisplay}" is already in use.`); } else { if (keyToChangeKey === 1) { playerToChangeKey.key = newKey; playerToChangeKey.keyDisplay = newKeyDisplay; playerToChangeKey.keyDisplayElement1.textContent = newKeyDisplay; } else { playerToChangeKey.key2 = newKey; playerToChangeKey.key2Display = newKeyDisplay; playerToChangeKey.keyDisplayElement2.textContent = newKeyDisplay; } updatePlayerControlTitle(playerToChangeKey); } const button = playerToChangeKey.customizeElement.querySelector(`.change-key-btn[data-key-index="${keyToChangeKey}"]`); button.textContent = 'Change'; button.classList.remove('is-listening'); playerToChangeKey = null; }
+    function handleKeySelection(e) { e.preventDefault(); const newKey = e.key.toLowerCase(); const newKeyDisplay = getKeyDisplay(e); const isKeyInUse = activePlayers.some(p => (p.key === newKey || p.key2 === newKey) && p.id !== playerToChangeKey.id); if (isKeyInUse) { alert(`Key "${newKeyDisplay}" is already in use.`); } else { if (keyToChangeIndex === 1) { playerToChangeKey.key = newKey; playerToChangeKey.keyDisplay = newKeyDisplay; playerToChangeKey.keyDisplayElement1.textContent = newKeyDisplay; } else { playerToChangeKey.key2 = newKey; playerToChangeKey.key2Display = newKeyDisplay; playerToChangeKey.keyDisplayElement2.textContent = newKeyDisplay; } updatePlayerControlTitle(playerToChangeKey); } const button = playerToChangeKey.customizeElement.querySelector(`.change-key-btn[data-key-index="${keyToChangeIndex}"]`); button.textContent = 'Change'; button.classList.remove('is-listening'); playerToChangeKey = null; }
     function openModal(modal) {
         cancelAutoCountdown();
         cancelPreCountdown();
@@ -534,9 +537,11 @@ document.addEventListener('DOMContentLoaded', () => {
         helpModal.classList.add('hidden');
         startOrResetAutoCountdown();
     }
-
+    
     function toggleHelpModal() { if (helpModal.classList.contains('hidden')) { helpControlsList.innerHTML = ''; if (activePlayers.length > 0) { activePlayers.forEach(p => { const item = document.createElement('div'); item.className = 'help-control-item'; let controlText; switch(p.controllerType) { case 'keyboard': controlText = `<span class="key">${p.keyDisplay}</span>`; if (startMode === 'two') { controlText += ` & <span class="key">${p.key2Display}</span>`; } break; case 'gamepad': controlText = `<span class="key">GP ${p.gamepadIndex}</span>`; break; case 'bot': controlText = `<span class="key">BOT</span>`; break; default: controlText = `<span class="key">Not Connected</span>`; break; } item.innerHTML = `<p>${p.name}: ${controlText}</p>`; item.style.borderColor = p.color; helpControlsList.appendChild(item); }); } else { helpControlsList.innerHTML = '<p>No players have been added yet.</p>'; } openModal(helpModal); } else { closeAllModals(); } }
+    
     function updateKeyConfigVisibility() { document.querySelectorAll('.key-config-area[data-key-index="2"]').forEach(el => { el.classList.toggle('hidden', startMode !== 'two'); }); }
+    
     function logMessage(message) { const li = document.createElement('li'); li.textContent = message; logList.appendChild(li); logContainer.scrollTop = logContainer.scrollHeight; }
     function updateWinsDisplay() { activePlayers.forEach(p => { p.winsElement.textContent = `Wins: ${p.sessionStats.wins}`; }); }
 
@@ -545,7 +550,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.addEventListener('keyup', handleKeyUp);
     newGameButton.addEventListener('click', initGame);
     addPlayerButton.addEventListener('click', addPlayer);
-    customizeToggleButton.addEventListener('click', () => openModal(customizeModal)); // [FIX] Call the correct function
+    customizeToggleButton.addEventListener('click', () => openModal(customizeModal));
     closeCustomizeModalButton.addEventListener('click', closeAllModals);
     customizeModal.addEventListener('click', handleCustomizeInteraction);
     customizeModal.addEventListener('input', (e) => { const target = e.target; const playerSection = target.closest('.customize-player-section'); if (!playerSection) return; const player = activePlayers.find(p => p.id === playerSection.dataset.playerId); if (!player) return; const parentGroup = target.closest('.settings-group'); if (!parentGroup) return; if (target.matches('.bot-cps-slider')) { const newValue = parseFloat(target.value); player.botSettings.cps = newValue; const inputField = parentGroup.querySelector('.bot-cps-input'); if (inputField) inputField.value = newValue.toFixed(1); } else if (target.matches('.bot-cps-input')) { const newValue = parseFloat(target.value); const slider = parentGroup.querySelector('.bot-cps-slider'); if (slider) slider.value = newValue; } else if (target.matches('.perfect-start-chance-slider')) { player.botSettings.perfectStartChance = parseInt(target.value); player.customizeElement.querySelector('.perfect-start-chance-display').textContent = target.value; } });
