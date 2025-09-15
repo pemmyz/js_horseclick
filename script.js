@@ -225,7 +225,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
-    // [MODIFIED] Added lastKeyTapped property to player object
     function createPlayer(playerData, options = {}) {
         const laneContainer = document.createElement('div');
         laneContainer.className = 'lane-container';
@@ -297,7 +296,7 @@ document.addEventListener('DOMContentLoaded', () => {
         customizePlayerList.appendChild(customizeSection);
         const playerObject = {
             ...playerData, sprite: '🏇', force: 0, position: 0, isKeyDown: false,
-            lastKeyTapped: null, // [NEW] State for sequential key presses
+            lastKeyTapped: null,
             laneElement: laneContainer,
             horseElement: laneContainer.querySelector('.horse'),
             forceBarElement: controlGroup.querySelector('.force-bar'),
@@ -311,7 +310,6 @@ document.addEventListener('DOMContentLoaded', () => {
             clicks: 0, lastCpsUpdateTime: 0,
             startState: 'waiting', isStalled: false,
             goKey1Pressed: false, goKey2Pressed: false,
-            gamepadButtonPressedLastFrame: false,
             isBot: false,
             botSettings: { mode: 'static', cps: 8.8, perfectStartChance: 50 },
             keyConfigContainer: customizeSection.querySelector('.key-config-container'),
@@ -335,30 +333,25 @@ document.addEventListener('DOMContentLoaded', () => {
         return playerObject;
     }
     
-    // [MODIFIED] Core logic for sequential tapping
     function triggerPlayerTap(player, keyPressed = null) {
+        // keyPressed can be a string ('a') for keyboard, or a number (0) for gamepad button index.
         if (player.isBot || !gameActive || player.isStalled) return;
 
-        // For single button mode or mouse clicks, use the old isKeyDown debounce.
-        // For two-button mode, check for sequential presses.
-        if (startMode === 'two' && player.controllerType === 'keyboard' && keyPressed) {
-            if (player.lastKeyTapped === keyPressed) {
-                return; // Same key pressed again, do nothing.
+        if (startMode === 'two' && keyPressed !== null) {
+             if (player.lastKeyTapped === keyPressed) {
+                return; // Same key/button pressed again, do nothing.
             }
         } else {
-            // Use isKeyDown for single-button mode, mouse, and gamepad to prevent "holding".
             if (player.isKeyDown) return;
             player.isKeyDown = true;
         }
 
-        // If we reached here, the tap is valid.
         player.force += incrementPerTap;
         player.clicks++;
         player.raceStats.totalClicks++;
         if (player.force > 100) player.force = 100;
 
-        // Update the state for the next tap in two-button mode.
-        if (startMode === 'two' && keyPressed) {
+        if (startMode === 'two' && keyPressed !== null) {
             player.lastKeyTapped = keyPressed;
         }
     }
@@ -389,8 +382,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function resetAllTimersAndLoops() { gameActive = false; clearTimeout(preCountdownTimeout); preCountdownTimeout = null; preCountdownEndTime = 0; clearInterval(countdownInterval); countdownInterval = null; document.removeEventListener('keydown', handlePreGameKeyDown); document.removeEventListener('keydown', handleGoKeyDown); preGameListenersActive = false; }
     function updateGameParameters() { if (currentDifficulty === 'manual') { incrementPerTap = parseInt(incrementSlider.value); drainRate = parseFloat(drainRateSlider.value) / 10; } else { const settings = difficultySettings[currentDifficulty]; incrementPerTap = settings.increment; drainRate = settings.drainRate; incrementSlider.value = incrementPerTap; drainRateSlider.value = settings.drainSlider; } incrementValueDisplay.textContent = incrementSlider.value; drainRateValueDisplay.textContent = (parseFloat(drainRateSlider.value) / 10).toFixed(1); startMode = startModeSelect.value; startBoostMultiplier = parseFloat(boostSlider.value) / 10; boostValueDisplay.textContent = startBoostMultiplier.toFixed(1); falseStartPenalty = falseStartPenaltySelect.value; const startSystemDisabled = startMode === 'disabled'; boostSliderGroup.classList.toggle('hidden', startSystemDisabled); falseStartPenaltyGroup.classList.toggle('hidden', startSystemDisabled); updateKeyConfigVisibility(); }
     
-    // [MODIFIED] Reset lastKeyTapped at the start of a race
-    function prepareGameBoard() { updateGameParameters(); winnerAnnEl.innerHTML = ''; winnerAnnEl.className = ''; activePlayers.forEach(p => { p.horseElement.innerHTML = p.sprite; p.horseElement.style.transform = `translateX(0px) scaleX(-1)`; p.horseElement.style.opacity = '1'; p.horseElement.classList.remove('perfect-start-highlight'); p.forceBarElement.style.height = '0%'; p.position = 0; p.force = 0; p.startState = 'waiting'; p.isStalled = false; p.goKey1Pressed = false; p.goKey2Pressed = false; p.gamepadButtonPressedLastFrame = false; p.clicks = 0; p.lastCpsUpdateTime = 0; p.lastKeyTapped = null; if (p.cpsDisplayElement) p.cpsDisplayElement.textContent = 'CPS: 0.0'; p.raceStats = { startTime: 0, totalClicks: 0, startReactionTime: -1, forceSum: 0, frameCount: 0 }; }); updateGameReadyState(); }
+    function prepareGameBoard() { updateGameParameters(); winnerAnnEl.innerHTML = ''; winnerAnnEl.className = ''; activePlayers.forEach(p => { p.horseElement.innerHTML = p.sprite; p.horseElement.style.transform = `translateX(0px) scaleX(-1)`; p.horseElement.style.opacity = '1'; p.horseElement.classList.remove('perfect-start-highlight'); p.forceBarElement.style.height = '0%'; p.position = 0; p.force = 0; p.startState = 'waiting'; p.isStalled = false; p.goKey1Pressed = false; p.goKey2Pressed = false; p.lastKeyTapped = null; if (p.cpsDisplayElement) p.cpsDisplayElement.textContent = 'CPS: 0.0'; p.raceStats = { startTime: 0, totalClicks: 0, startReactionTime: -1, forceSum: 0, frameCount: 0 }; }); updateGameReadyState(); }
     
     function startRaceSequence() { prepareGameBoard(); if (startMode !== 'disabled') { document.addEventListener('keydown', handlePreGameKeyDown); preGameListenersActive = true; } startCountdown(3, 'Get Ready...'); }
     function updatePreCountdownDisplay() { clearTimeout(preCountdownTimeout); const remaining = preCountdownEndTime - Date.now(); if (remaining <= 0) { countdownDisplay.textContent = 'Starting...'; preCountdownEndTime = 0; startRaceSequence(); } else { countdownDisplay.textContent = `Next race in ${Math.ceil(remaining / 1000)}...`; preCountdownTimeout = setTimeout(updatePreCountdownDisplay, 200); } }
@@ -419,7 +411,6 @@ document.addEventListener('DOMContentLoaded', () => {
     function logRaceStats(winner) { const endTime = performance.now(); const raceDuration = goTime > 0 ? (endTime - goTime) / 1000 : 0; let statsLogContent = `<strong>--- Race Over (Duration: ${raceDuration.toFixed(2)}s) ---</strong>\n`; const rankedPlayers = [...activePlayers].sort((a, b) => b.position - a.position); const rankEmojis = ['🏆', '🥈', '🥉', '4️⃣']; statsLogContent += `<strong>Rankings:</strong>\n`; rankedPlayers.forEach((p, index) => { statsLogContent += `${rankEmojis[index] || (index + 1) + '.'} ${p.name}\n`; }); statsLogContent += `\n<strong>=== Race Performance ===</strong>\n`; rankedPlayers.forEach((p, index) => { const isWinner = p.id === winner.id; const avgCPS = raceDuration > 0.1 ? (p.raceStats.totalClicks / raceDuration).toFixed(1) : '0.0'; const avgForce = p.raceStats.frameCount > 0 ? (p.raceStats.forceSum / p.raceStats.frameCount).toFixed(1) : '0.0'; p.sessionStats.racesPlayed++; if (isWinner) { p.sessionStats.wins++; p.sessionStats.winningStreak++; p.sessionStats.longestWinningStreak = Math.max(p.sessionStats.longestWinningStreak, p.sessionStats.winningStreak); p.sessionStats.bestRaceTime = Math.min(p.sessionStats.bestRaceTime, raceDuration); } else { p.sessionStats.winningStreak = 0; } p.sessionStats.bestAvgCPS = Math.max(p.sessionStats.bestAvgCPS, parseFloat(avgCPS) || 0); let reactionText; if (p.isBot) { reactionText = 'N/A (Bot)'; } else if (p.raceStats.startReactionTime === -2) { reactionText = 'False Start'; } else if (p.raceStats.startReactionTime === -1) { reactionText = 'No start detected'; } else { const reactionMs = p.raceStats.startReactionTime.toFixed(0); reactionText = `${reactionMs}ms`; p.sessionStats.bestReactionTime = Math.min(p.sessionStats.bestReactionTime, p.raceStats.startReactionTime); } statsLogContent += `\n<strong>${p.name} (#${index + 1}${isWinner ? ', WINNER' : ''})</strong>\n`; statsLogContent += `  - Avg CPS: ${avgCPS}\n`; statsLogContent += `  - Total Clicks: ${p.raceStats.totalClicks}\n`; statsLogContent += `  - Avg Force: ${avgForce}%\n`; statsLogContent += `  - Start Reaction: ${reactionText}\n`; }); statsLogContent += `\n<strong>=== Session Stats Summary ===</strong>\n`; activePlayers.forEach(p => { statsLogContent += `\n<strong>${p.name}</strong>\n`; statsLogContent += `  - Wins: ${p.sessionStats.wins} / ${p.sessionStats.racesPlayed} | Win Streak: ${p.sessionStats.winningStreak} (Best: ${p.sessionStats.longestWinningStreak})\n`; statsLogContent += `  - Best Race Time: ${p.sessionStats.bestRaceTime === Infinity ? 'N/A' : p.sessionStats.bestRaceTime.toFixed(2) + 's'}\n`; statsLogContent += `  - Best Avg CPS: ${p.sessionStats.bestAvgCPS.toFixed(1)}\n`; if (!p.isBot && p.sessionStats.allReactionTimes.length > 0) { const reactionStats = computeReactionStats(p.sessionStats.allReactionTimes); if (reactionStats) { statsLogContent += `  - Reactions (ms): Avg: ${reactionStats.average.toFixed(0)}, Best: ${reactionStats.fastest.toFixed(0)}, Worst: ${reactionStats.slowest.toFixed(0)}, SD: ${reactionStats.stdev.toFixed(1)}\n`; } } }); const li = document.createElement('li'); const pre = document.createElement('pre'); pre.style.margin = '0'; pre.style.whiteSpace = 'pre-wrap';  pre.style.fontFamily = 'inherit'; pre.innerHTML = statsLogContent; li.appendChild(pre); logList.appendChild(li); logContainer.scrollTop = logContainer.scrollHeight; }
 
     // --- Input Handling ---
-    // [MODIFIED] Pass the pressed key to triggerPlayerTap
     function handleKeyDown(e) {
         if (playerToChangeKey) return;
         if (e.key === 'h' || e.key === 'H') { e.preventDefault(); toggleHelpModal(); return; }
@@ -441,6 +432,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function handlePreGameKeyDown(e) { const key = e.key.toLowerCase(); const player = activePlayers.find(p => !p.isBot && p.controllerType === 'keyboard' && (p.key === key || p.key2 === key)); if (player && player.startState === 'waiting') { if (falseStartPenalty === 'stall') { player.startState = 'false_start'; player.raceStats.startReactionTime = -2; logMessage(`💥 ${player.name} jumped the gun! (FALSE START)`); playSound({ frequency: 220, duration: 0.3, type: 'sawtooth' }); player.horseElement.style.opacity = '0.4'; } } }
     function handleGoKeyDown(e) { const key = e.key.toLowerCase(); const player = activePlayers.find(p => !p.isBot && p.controllerType === 'keyboard' && (p.key === key || p.key2 === key)); if (!player || player.startState !== 'waiting') return; if (player.raceStats.startReactionTime === -1) { const reaction = performance.now() - goTime; player.raceStats.startReactionTime = reaction; player.sessionStats.allReactionTimes.push(reaction); } if (startMode === 'single' && key === player.key) { player.startState = 'boosted'; } else if (startMode === 'two') { if (key === player.key) player.goKey1Pressed = true; if (key === player.key2) player.goKey2Pressed = true; } }
     
+    // [MODIFIED] Major refactor to handle individual button presses for sequential logic
     function handleGamepadInput(currentTime) {
         const polledPads = navigator.getGamepads ? navigator.getGamepads() : [];
 
@@ -452,28 +444,51 @@ document.addEventListener('DOMContentLoaded', () => {
             const anyFaceButtonPressed = pad.buttons[0]?.pressed || pad.buttons[1]?.pressed || pad.buttons[2]?.pressed || pad.buttons[3]?.pressed;
 
             if (assignedInputs.has(inputId)) {
+                // Gamepad is ASSIGNED
                 const player = activePlayers.find(p => p.gamepadIndex === i);
                 if (!player || player.isBot) continue;
 
-                if (anyFaceButtonPressed && !player.gamepadButtonPressedLastFrame) {
-                    if (preGameListenersActive && player.startState === 'waiting') {
-                        if (falseStartPenalty === 'stall') { player.startState = 'false_start'; player.raceStats.startReactionTime = -2; logMessage(`💥 ${player.name} jumped the gun! (GAMEPAD)`); playSound({ frequency: 220, duration: 0.3, type: 'sawtooth' }); player.horseElement.style.opacity = '0.4'; }
-                    } else if (goTime > 0 && currentTime - goTime < PERFECT_START_WINDOW_MS && player.startState === 'waiting') {
-                         if (player.raceStats.startReactionTime === -1) { const reaction = currentTime - goTime; player.raceStats.startReactionTime = reaction; player.sessionStats.allReactionTimes.push(reaction); }
-                        player.startState = 'boosted';
-                    } else if (gameActive) {
-                        triggerPlayerTap(player);
+                // Iterate through the face buttons (0-3: A,B,X,Y or X,O,□,△)
+                for (let j = 0; j < 4; j++) {
+                    const buttonIsPressed = pad.buttons[j]?.pressed;
+                    const buttonWasPressed = lastGamepadButtonStates[i]?.[j];
+
+                    // Check for a new press (rising edge)
+                    if (buttonIsPressed && !buttonWasPressed) {
+                        // False Start Check
+                        if (preGameListenersActive && player.startState === 'waiting') {
+                            if (falseStartPenalty === 'stall') {
+                                player.startState = 'false_start';
+                                player.raceStats.startReactionTime = -2;
+                                logMessage(`💥 ${player.name} jumped the gun! (GAMEPAD)`);
+                                playSound({ frequency: 220, duration: 0.3, type: 'sawtooth' });
+                                player.horseElement.style.opacity = '0.4';
+                            }
+                        } 
+                        // Perfect Start Check
+                        else if (goTime > 0 && currentTime - goTime < PERFECT_START_WINDOW_MS && player.startState === 'waiting') {
+                            if (player.raceStats.startReactionTime === -1) {
+                                const reaction = currentTime - goTime;
+                                player.raceStats.startReactionTime = reaction;
+                                player.sessionStats.allReactionTimes.push(reaction);
+                            }
+                            player.startState = 'boosted';
+                        } 
+                        // Regular Gameplay Tap
+                        else if (gameActive) {
+                            triggerPlayerTap(player, j); // Pass button index for sequential logic
+                        }
                     }
                 }
 
-                if (!anyFaceButtonPressed && player.gamepadButtonPressedLastFrame) { player.isKeyDown = false; }
-                player.gamepadButtonPressedLastFrame = anyFaceButtonPressed;
             } else {
+                // Gamepad is UNASSIGNED - Check for join attempt
                 const wasPressedLastFrame = lastGamepadButtonStates[i] && (lastGamepadButtonStates[i][0] || lastGamepadButtonStates[i][1] || lastGamepadButtonStates[i][2] || lastGamepadButtonStates[i][3]);
                 if (anyFaceButtonPressed && !wasPressedLastFrame) {
                     handleJoinAttempt('gamepad', { index: i });
                 }
             }
+            // Store the current state of all buttons for the next frame
             lastGamepadButtonStates[i] = pad.buttons.map(b => b.pressed);
         }
     }
@@ -599,7 +614,6 @@ document.addEventListener('DOMContentLoaded', () => {
             logMessage(`🎮 Gamepad ${disconnectedIndex} disconnected from ${player.name}. Player is now uncontrolled.`);
             player.gamepadIndex = null;
             player.controllerType = 'none';
-            player.gamepadButtonPressedLastFrame = false;
             updatePlayerControlTitle(player);
         }
         assignedInputs.delete(`gamepad_${disconnectedIndex}`);
