@@ -47,7 +47,6 @@ document.addEventListener('DOMContentLoaded', () => {
         medium: { increment: 12, drainRate: 0.4, drainSlider: 4 },
         hard:   { increment: 8,  drainRate: 0.7, drainSlider: 7 }
     };
-    // [MODIFIED] Updated key assignments for Player 1 and Player 2
     const availablePlayers = [
         { id: 'p1', name: 'Player 1', key: 'a', keyDisplay: 'A', key2: 'd', key2Display: 'D', color: '#ff8a65' },
         { id: 'p2', name: 'Player 2', key: 'arrowleft', keyDisplay: 'Left Arrow', key2: 'arrowright', key2Display: 'Right Arrow', color: '#64b5f6' },
@@ -70,7 +69,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let countdownInterval;
     let playerToChangeKey = null;
     let keyToChangeIndex = 1;
-    let startMode = 'single'; 
+    let startMode = 'single';
     let startBoostMultiplier = 1.0;
     let falseStartPenalty = 'stall';
     let preGameListenersActive = false;
@@ -118,7 +117,7 @@ document.addEventListener('DOMContentLoaded', () => {
         cancelAutoCountdown();
 
         if (gameActive || activePlayers.length < 2) {
-            if (!gameActive) updateGameReadyState(); // Update text if count drops below 2
+            if (!gameActive) updateGameReadyState();
             return;
         }
 
@@ -162,7 +161,6 @@ document.addEventListener('DOMContentLoaded', () => {
         
         if (inputType === 'keyboard') {
             const key = details.key;
-            // The logic to find the player config for a given key remains correct
             const configForKey = availablePlayers.find(p => p.key === key || p.key2 === key);
             if (!configForKey || activePlayers.some(p => p.id === configForKey.id)) return;
             playerConfigToJoin = availablePlayers[activePlayers.length];
@@ -227,6 +225,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
+    // [MODIFIED] Added lastKeyTapped property to player object
     function createPlayer(playerData, options = {}) {
         const laneContainer = document.createElement('div');
         laneContainer.className = 'lane-container';
@@ -298,6 +297,7 @@ document.addEventListener('DOMContentLoaded', () => {
         customizePlayerList.appendChild(customizeSection);
         const playerObject = {
             ...playerData, sprite: '🏇', force: 0, position: 0, isKeyDown: false,
+            lastKeyTapped: null, // [NEW] State for sequential key presses
             laneElement: laneContainer,
             horseElement: laneContainer.querySelector('.horse'),
             forceBarElement: controlGroup.querySelector('.force-bar'),
@@ -310,7 +310,7 @@ document.addEventListener('DOMContentLoaded', () => {
             cpsDisplayElement: controlGroup.querySelector('.cps-display'),
             clicks: 0, lastCpsUpdateTime: 0,
             startState: 'waiting', isStalled: false,
-            goKey1Pressed: false, goKey2Pressed: false, 
+            goKey1Pressed: false, goKey2Pressed: false,
             gamepadButtonPressedLastFrame: false,
             isBot: false,
             botSettings: { mode: 'static', cps: 8.8, perfectStartChance: 50 },
@@ -335,13 +335,32 @@ document.addEventListener('DOMContentLoaded', () => {
         return playerObject;
     }
     
-    function triggerPlayerTap(player) {
-        if (player.isBot || !gameActive || player.isKeyDown || player.isStalled) return;
-        player.isKeyDown = true;
+    // [MODIFIED] Core logic for sequential tapping
+    function triggerPlayerTap(player, keyPressed = null) {
+        if (player.isBot || !gameActive || player.isStalled) return;
+
+        // For single button mode or mouse clicks, use the old isKeyDown debounce.
+        // For two-button mode, check for sequential presses.
+        if (startMode === 'two' && player.controllerType === 'keyboard' && keyPressed) {
+            if (player.lastKeyTapped === keyPressed) {
+                return; // Same key pressed again, do nothing.
+            }
+        } else {
+            // Use isKeyDown for single-button mode, mouse, and gamepad to prevent "holding".
+            if (player.isKeyDown) return;
+            player.isKeyDown = true;
+        }
+
+        // If we reached here, the tap is valid.
         player.force += incrementPerTap;
         player.clicks++;
         player.raceStats.totalClicks++;
         if (player.force > 100) player.force = 100;
+
+        // Update the state for the next tap in two-button mode.
+        if (startMode === 'two' && keyPressed) {
+            player.lastKeyTapped = keyPressed;
+        }
     }
 
     function updateGridLayout() {
@@ -369,7 +388,10 @@ document.addEventListener('DOMContentLoaded', () => {
     
     function resetAllTimersAndLoops() { gameActive = false; clearTimeout(preCountdownTimeout); preCountdownTimeout = null; preCountdownEndTime = 0; clearInterval(countdownInterval); countdownInterval = null; document.removeEventListener('keydown', handlePreGameKeyDown); document.removeEventListener('keydown', handleGoKeyDown); preGameListenersActive = false; }
     function updateGameParameters() { if (currentDifficulty === 'manual') { incrementPerTap = parseInt(incrementSlider.value); drainRate = parseFloat(drainRateSlider.value) / 10; } else { const settings = difficultySettings[currentDifficulty]; incrementPerTap = settings.increment; drainRate = settings.drainRate; incrementSlider.value = incrementPerTap; drainRateSlider.value = settings.drainSlider; } incrementValueDisplay.textContent = incrementSlider.value; drainRateValueDisplay.textContent = (parseFloat(drainRateSlider.value) / 10).toFixed(1); startMode = startModeSelect.value; startBoostMultiplier = parseFloat(boostSlider.value) / 10; boostValueDisplay.textContent = startBoostMultiplier.toFixed(1); falseStartPenalty = falseStartPenaltySelect.value; const startSystemDisabled = startMode === 'disabled'; boostSliderGroup.classList.toggle('hidden', startSystemDisabled); falseStartPenaltyGroup.classList.toggle('hidden', startSystemDisabled); updateKeyConfigVisibility(); }
-    function prepareGameBoard() { updateGameParameters(); winnerAnnEl.innerHTML = ''; winnerAnnEl.className = ''; activePlayers.forEach(p => { p.horseElement.innerHTML = p.sprite; p.horseElement.style.transform = `translateX(0px) scaleX(-1)`; p.horseElement.style.opacity = '1'; p.horseElement.classList.remove('perfect-start-highlight'); p.forceBarElement.style.height = '0%'; p.position = 0; p.force = 0; p.startState = 'waiting'; p.isStalled = false; p.goKey1Pressed = false; p.goKey2Pressed = false; p.gamepadButtonPressedLastFrame = false; p.clicks = 0; p.lastCpsUpdateTime = 0; if (p.cpsDisplayElement) p.cpsDisplayElement.textContent = 'CPS: 0.0'; p.raceStats = { startTime: 0, totalClicks: 0, startReactionTime: -1, forceSum: 0, frameCount: 0 }; }); updateGameReadyState(); }
+    
+    // [MODIFIED] Reset lastKeyTapped at the start of a race
+    function prepareGameBoard() { updateGameParameters(); winnerAnnEl.innerHTML = ''; winnerAnnEl.className = ''; activePlayers.forEach(p => { p.horseElement.innerHTML = p.sprite; p.horseElement.style.transform = `translateX(0px) scaleX(-1)`; p.horseElement.style.opacity = '1'; p.horseElement.classList.remove('perfect-start-highlight'); p.forceBarElement.style.height = '0%'; p.position = 0; p.force = 0; p.startState = 'waiting'; p.isStalled = false; p.goKey1Pressed = false; p.goKey2Pressed = false; p.gamepadButtonPressedLastFrame = false; p.clicks = 0; p.lastCpsUpdateTime = 0; p.lastKeyTapped = null; if (p.cpsDisplayElement) p.cpsDisplayElement.textContent = 'CPS: 0.0'; p.raceStats = { startTime: 0, totalClicks: 0, startReactionTime: -1, forceSum: 0, frameCount: 0 }; }); updateGameReadyState(); }
+    
     function startRaceSequence() { prepareGameBoard(); if (startMode !== 'disabled') { document.addEventListener('keydown', handlePreGameKeyDown); preGameListenersActive = true; } startCountdown(3, 'Get Ready...'); }
     function updatePreCountdownDisplay() { clearTimeout(preCountdownTimeout); const remaining = preCountdownEndTime - Date.now(); if (remaining <= 0) { countdownDisplay.textContent = 'Starting...'; preCountdownEndTime = 0; startRaceSequence(); } else { countdownDisplay.textContent = `Next race in ${Math.ceil(remaining / 1000)}...`; preCountdownTimeout = setTimeout(updatePreCountdownDisplay, 200); } }
     function startAutomaticRematchCountdown() { if(document.hidden) return; logMessage("⏱️ Next race starts automatically in 5 seconds... Press 'New Game' to start sooner."); preCountdownEndTime = Date.now() + 5000; updatePreCountdownDisplay(); }
@@ -397,6 +419,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function logRaceStats(winner) { const endTime = performance.now(); const raceDuration = goTime > 0 ? (endTime - goTime) / 1000 : 0; let statsLogContent = `<strong>--- Race Over (Duration: ${raceDuration.toFixed(2)}s) ---</strong>\n`; const rankedPlayers = [...activePlayers].sort((a, b) => b.position - a.position); const rankEmojis = ['🏆', '🥈', '🥉', '4️⃣']; statsLogContent += `<strong>Rankings:</strong>\n`; rankedPlayers.forEach((p, index) => { statsLogContent += `${rankEmojis[index] || (index + 1) + '.'} ${p.name}\n`; }); statsLogContent += `\n<strong>=== Race Performance ===</strong>\n`; rankedPlayers.forEach((p, index) => { const isWinner = p.id === winner.id; const avgCPS = raceDuration > 0.1 ? (p.raceStats.totalClicks / raceDuration).toFixed(1) : '0.0'; const avgForce = p.raceStats.frameCount > 0 ? (p.raceStats.forceSum / p.raceStats.frameCount).toFixed(1) : '0.0'; p.sessionStats.racesPlayed++; if (isWinner) { p.sessionStats.wins++; p.sessionStats.winningStreak++; p.sessionStats.longestWinningStreak = Math.max(p.sessionStats.longestWinningStreak, p.sessionStats.winningStreak); p.sessionStats.bestRaceTime = Math.min(p.sessionStats.bestRaceTime, raceDuration); } else { p.sessionStats.winningStreak = 0; } p.sessionStats.bestAvgCPS = Math.max(p.sessionStats.bestAvgCPS, parseFloat(avgCPS) || 0); let reactionText; if (p.isBot) { reactionText = 'N/A (Bot)'; } else if (p.raceStats.startReactionTime === -2) { reactionText = 'False Start'; } else if (p.raceStats.startReactionTime === -1) { reactionText = 'No start detected'; } else { const reactionMs = p.raceStats.startReactionTime.toFixed(0); reactionText = `${reactionMs}ms`; p.sessionStats.bestReactionTime = Math.min(p.sessionStats.bestReactionTime, p.raceStats.startReactionTime); } statsLogContent += `\n<strong>${p.name} (#${index + 1}${isWinner ? ', WINNER' : ''})</strong>\n`; statsLogContent += `  - Avg CPS: ${avgCPS}\n`; statsLogContent += `  - Total Clicks: ${p.raceStats.totalClicks}\n`; statsLogContent += `  - Avg Force: ${avgForce}%\n`; statsLogContent += `  - Start Reaction: ${reactionText}\n`; }); statsLogContent += `\n<strong>=== Session Stats Summary ===</strong>\n`; activePlayers.forEach(p => { statsLogContent += `\n<strong>${p.name}</strong>\n`; statsLogContent += `  - Wins: ${p.sessionStats.wins} / ${p.sessionStats.racesPlayed} | Win Streak: ${p.sessionStats.winningStreak} (Best: ${p.sessionStats.longestWinningStreak})\n`; statsLogContent += `  - Best Race Time: ${p.sessionStats.bestRaceTime === Infinity ? 'N/A' : p.sessionStats.bestRaceTime.toFixed(2) + 's'}\n`; statsLogContent += `  - Best Avg CPS: ${p.sessionStats.bestAvgCPS.toFixed(1)}\n`; if (!p.isBot && p.sessionStats.allReactionTimes.length > 0) { const reactionStats = computeReactionStats(p.sessionStats.allReactionTimes); if (reactionStats) { statsLogContent += `  - Reactions (ms): Avg: ${reactionStats.average.toFixed(0)}, Best: ${reactionStats.fastest.toFixed(0)}, Worst: ${reactionStats.slowest.toFixed(0)}, SD: ${reactionStats.stdev.toFixed(1)}\n`; } } }); const li = document.createElement('li'); const pre = document.createElement('pre'); pre.style.margin = '0'; pre.style.whiteSpace = 'pre-wrap';  pre.style.fontFamily = 'inherit'; pre.innerHTML = statsLogContent; li.appendChild(pre); logList.appendChild(li); logContainer.scrollTop = logContainer.scrollHeight; }
 
     // --- Input Handling ---
+    // [MODIFIED] Pass the pressed key to triggerPlayerTap
     function handleKeyDown(e) {
         if (playerToChangeKey) return;
         if (e.key === 'h' || e.key === 'H') { e.preventDefault(); toggleHelpModal(); return; }
@@ -408,11 +431,12 @@ document.addEventListener('DOMContentLoaded', () => {
         if (player) {
             if (!gameActive) return;
             e.preventDefault();
-            triggerPlayerTap(player);
+            triggerPlayerTap(player, key);
         } else {
             handleJoinAttempt('keyboard', { key });
         }
     }
+    
     function handleKeyUp(e) { const key = e.key.toLowerCase(); const player = activePlayers.find(p => !p.isBot && p.controllerType === 'keyboard' && (p.key === key || p.key2 === key)); if (player) player.isKeyDown = false; }
     function handlePreGameKeyDown(e) { const key = e.key.toLowerCase(); const player = activePlayers.find(p => !p.isBot && p.controllerType === 'keyboard' && (p.key === key || p.key2 === key)); if (player && player.startState === 'waiting') { if (falseStartPenalty === 'stall') { player.startState = 'false_start'; player.raceStats.startReactionTime = -2; logMessage(`💥 ${player.name} jumped the gun! (FALSE START)`); playSound({ frequency: 220, duration: 0.3, type: 'sawtooth' }); player.horseElement.style.opacity = '0.4'; } } }
     function handleGoKeyDown(e) { const key = e.key.toLowerCase(); const player = activePlayers.find(p => !p.isBot && p.controllerType === 'keyboard' && (p.key === key || p.key2 === key)); if (!player || player.startState !== 'waiting') return; if (player.raceStats.startReactionTime === -1) { const reaction = performance.now() - goTime; player.raceStats.startReactionTime = reaction; player.sessionStats.allReactionTimes.push(reaction); } if (startMode === 'single' && key === player.key) { player.startState = 'boosted'; } else if (startMode === 'two') { if (key === player.key) player.goKey1Pressed = true; if (key === player.key2) player.goKey2Pressed = true; } }
@@ -457,11 +481,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- UI & Modals ---
     function updatePlayerControlTitle(player) {
         if (!player || !player.controlsTitleElement) return;
-
         let controlInfo;
         switch (player.controllerType) {
             case 'keyboard':
-                // The logic to display keys is already correct for both modes
                 controlInfo = `(${player.keyDisplay}`;
                 if (startMode === 'two') {
                     controlInfo += ` / ${player.key2Display}`;
