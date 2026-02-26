@@ -604,46 +604,48 @@ document.addEventListener('DOMContentLoaded', () => {
         updateMobileScale();
     };
 
-
-
-//attempt to fix mobile scaling
-function updateMobileScale() {
+    function updateMobileScale() {
         if (!document.body.classList.contains('mobile-scale-mode')) return;
-
         
         const container = document.getElementById('game-container');
         const helpPrompt = document.getElementById('help-prompt');
 
-        // Hide the "Press H" prompt in mobile mode
-        if (helpPrompt) {
-            helpPrompt.style.display = 'none';
-        }
+        // Hide "Press H" in mobile
+        if (helpPrompt) helpPrompt.style.display = 'none';
         
-        // 1. Reset styles to allow browser to calculate natural dimensions
+        // 1. Reset positioning/transforms to get clean measurements
         container.style.transform = 'none'; 
-        container.style.width = ''; 
         container.style.margin = '0';
         container.style.position = 'absolute';
+        container.style.transformOrigin = 'top left';
         
-        // 2. Force the target width to establish the layout
-        const targetWidth = 1100; 
-        container.style.width = targetWidth + 'px';
+        // 2. Detect Orientation and Apply Classes for CSS Grid
+        const isPortrait = window.innerHeight > window.innerWidth;
         
-        // 3. Get the resulting height (this changes when players are added)
+        if (isPortrait) {
+            document.body.classList.add('is-portrait');
+            document.body.classList.remove('is-landscape');
+        } else {
+            document.body.classList.add('is-landscape');
+            document.body.classList.remove('is-portrait');
+        }
+
+        // 3. Measure the Target Dimensions 
+        // We use offsetWidth to capture the full layout size determined by CSS
+        const targetWidth = container.offsetWidth; 
         const targetHeight = container.offsetHeight; 
         
-        // 4. Calculate scale factors for both dimensions
+        // 4. Calculate Scale to "Contain" the game within the screen
         const scaleX = window.innerWidth / targetWidth;
         const scaleY = window.innerHeight / targetHeight;
         
-        // 5. Choose the smaller scale to ensure EVERYTHING fits on screen (contain)
+        // Pick the smaller scale so the whole UI (Game + Log) fits without cutting off
         const scale = Math.min(scaleX, scaleY);
         
-        // 6. Apply scale from top-left corner
-        container.style.transformOrigin = 'top left';
+        // 5. Apply Scale
         container.style.transform = `scale(${scale})`;
 
-        // 7. Center the game in the viewport
+        // 6. Center the Result
         const rectWidth = targetWidth * scale;
         const rectHeight = targetHeight * scale;
         
@@ -653,8 +655,6 @@ function updateMobileScale() {
         container.style.left = `${Math.max(0, offsetX)}px`;
         container.style.top = `${Math.max(0, offsetY)}px`;
     }
-
-
 
     // Adjust scaling dynamically on window resize
     window.addEventListener('resize', updateMobileScale);
