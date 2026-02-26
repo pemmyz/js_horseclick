@@ -606,9 +606,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
 
-
+//attempt to fix mobile scaling
 function updateMobileScale() {
         if (!document.body.classList.contains('mobile-scale-mode')) return;
+
         
         const container = document.getElementById('game-container');
         const helpPrompt = document.getElementById('help-prompt');
