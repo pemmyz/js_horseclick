@@ -613,40 +613,45 @@ function updateMobileScale() {
         const container = document.getElementById('game-container');
         const helpPrompt = document.getElementById('help-prompt');
 
-        // Hide the "Press H" prompt in mobile mode as it creates layout issues 
-        // and is not needed for touch users.
+        // Hide the "Press H" prompt in mobile mode
         if (helpPrompt) {
             helpPrompt.style.display = 'none';
         }
         
-        // Reset positioning styles to ensure clean scaling
+        // 1. Reset styles to allow browser to calculate natural dimensions
         container.style.transform = 'none'; 
         container.style.width = ''; 
         container.style.margin = '0';
         container.style.position = 'absolute';
-        container.style.top = '0';
-        container.style.left = '0';
         
-        // Set transform origin to top-left so 0,0 maps to the screen corner
-        container.style.transformOrigin = 'top left';
-
-        const targetWidth = 1100; // The defined max-width of the game
-        
-        // Calculate scale factor to make the 1100px container fit exactly 
-        // into the current window width (fills screen left-to-right)
-        const scale = window.innerWidth / targetWidth;
-        
-        // Force container to full target width, then scale it down to fit window
+        // 2. Force the target width to establish the layout
+        const targetWidth = 1100; 
         container.style.width = targetWidth + 'px';
+        
+        // 3. Get the resulting height (this changes when players are added)
+        const targetHeight = container.offsetHeight; 
+        
+        // 4. Calculate scale factors for both dimensions
+        const scaleX = window.innerWidth / targetWidth;
+        const scaleY = window.innerHeight / targetHeight;
+        
+        // 5. Choose the smaller scale to ensure EVERYTHING fits on screen (contain)
+        const scale = Math.min(scaleX, scaleY);
+        
+        // 6. Apply scale from top-left corner
+        container.style.transformOrigin = 'top left';
         container.style.transform = `scale(${scale})`;
 
-        // Center vertically if the scaled game is shorter than the screen
-        const scaledHeight = container.offsetHeight * scale;
-        if (scaledHeight < window.innerHeight) {
-            container.style.top = ((window.innerHeight - scaledHeight) / 2) + 'px';
-        }
+        // 7. Center the game in the viewport
+        const rectWidth = targetWidth * scale;
+        const rectHeight = targetHeight * scale;
+        
+        const offsetX = (window.innerWidth - rectWidth) / 2;
+        const offsetY = (window.innerHeight - rectHeight) / 2;
+        
+        container.style.left = `${Math.max(0, offsetX)}px`;
+        container.style.top = `${Math.max(0, offsetY)}px`;
     }
-
 
 
 
