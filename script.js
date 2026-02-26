@@ -604,29 +604,64 @@ document.addEventListener('DOMContentLoaded', () => {
         updateMobileScale();
     };
 
-    function updateMobileScale() {
+
+
+
+function updateMobileScale() {
         if (!document.body.classList.contains('mobile-scale-mode')) return;
         
         const container = document.getElementById('game-container');
         
-        // Remove scale to calculate accurate natural height
+        // Reset styles to calculate natural dimensions correctly
         container.style.transform = 'none'; 
+        container.style.width = ''; 
+        container.style.position = '';
+        container.style.top = '';
+        container.style.left = '';
+        container.style.transformOrigin = '';
         
-        // Target base width we want to fit on screen
         const targetWidth = 1100;
-        const targetHeight = container.offsetHeight; 
+        const isPortrait = window.innerHeight > window.innerWidth;
         
-        // Calculate the scale required to fit window perfectly
-        const scaleX = window.innerWidth / targetWidth;
-        const scaleY = window.innerHeight / targetHeight;
-        
-        // Using Math.min ensures it scales down keeping aspect ratio, leaving bars where necessary
-        const scale = Math.min(scaleX, scaleY);
-        
-        container.style.width = targetWidth + 'px';
-        container.style.transformOrigin = 'top center';
-        container.style.transform = `scale(${scale})`;
+        if (isPortrait) {
+            // --- PORTRAIT MODE: ROTATE 90 DEG ---
+            // Force width to target so layout renders correctly before rotation
+            container.style.width = targetWidth + 'px';
+            
+            const targetHeight = container.offsetHeight;
+            
+            // In portrait, we map Game-Width to Screen-Height and Game-Height to Screen-Width
+            const scaleX = window.innerHeight / targetWidth;
+            const scaleY = window.innerWidth / targetHeight;
+            
+            // Fit the whole game into the screen
+            const scale = Math.min(scaleX, scaleY);
+            
+            // Center and Rotate
+            container.style.position = 'absolute';
+            container.style.top = '50%';
+            container.style.left = '50%';
+            container.style.transform = `translate(-50%, -50%) rotate(90deg) scale(${scale})`;
+            
+        } else {
+            // --- LANDSCAPE MODE: STANDARD SCALING ---
+            // Force width
+            container.style.width = targetWidth + 'px';
+            
+            const targetHeight = container.offsetHeight; 
+            
+            const scaleX = window.innerWidth / targetWidth;
+            const scaleY = window.innerHeight / targetHeight;
+            
+            const scale = Math.min(scaleX, scaleY);
+            
+            container.style.transformOrigin = 'top center';
+            container.style.transform = `scale(${scale})`;
+        }
     }
+
+
+
 
     // Adjust scaling dynamically on window resize
     window.addEventListener('resize', updateMobileScale);
