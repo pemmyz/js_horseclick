@@ -611,52 +611,39 @@ function updateMobileScale() {
         if (!document.body.classList.contains('mobile-scale-mode')) return;
         
         const container = document.getElementById('game-container');
+        const helpPrompt = document.getElementById('help-prompt');
+
+        // Hide the "Press H" prompt in mobile mode as it creates layout issues 
+        // and is not needed for touch users.
+        if (helpPrompt) {
+            helpPrompt.style.display = 'none';
+        }
         
-        // Reset styles to calculate natural dimensions correctly
+        // Reset positioning styles to ensure clean scaling
         container.style.transform = 'none'; 
         container.style.width = ''; 
-        container.style.position = '';
-        container.style.top = '';
-        container.style.left = '';
-        container.style.transformOrigin = '';
+        container.style.margin = '0';
+        container.style.position = 'absolute';
+        container.style.top = '0';
+        container.style.left = '0';
         
-        const targetWidth = 1100;
-        const isPortrait = window.innerHeight > window.innerWidth;
+        // Set transform origin to top-left so 0,0 maps to the screen corner
+        container.style.transformOrigin = 'top left';
+
+        const targetWidth = 1100; // The defined max-width of the game
         
-        if (isPortrait) {
-            // --- PORTRAIT MODE: ROTATE 90 DEG ---
-            // Force width to target so layout renders correctly before rotation
-            container.style.width = targetWidth + 'px';
-            
-            const targetHeight = container.offsetHeight;
-            
-            // In portrait, we map Game-Width to Screen-Height and Game-Height to Screen-Width
-            const scaleX = window.innerHeight / targetWidth;
-            const scaleY = window.innerWidth / targetHeight;
-            
-            // Fit the whole game into the screen
-            const scale = Math.min(scaleX, scaleY);
-            
-            // Center and Rotate
-            container.style.position = 'absolute';
-            container.style.top = '50%';
-            container.style.left = '50%';
-            container.style.transform = `translate(-50%, -50%) rotate(90deg) scale(${scale})`;
-            
-        } else {
-            // --- LANDSCAPE MODE: STANDARD SCALING ---
-            // Force width
-            container.style.width = targetWidth + 'px';
-            
-            const targetHeight = container.offsetHeight; 
-            
-            const scaleX = window.innerWidth / targetWidth;
-            const scaleY = window.innerHeight / targetHeight;
-            
-            const scale = Math.min(scaleX, scaleY);
-            
-            container.style.transformOrigin = 'top center';
-            container.style.transform = `scale(${scale})`;
+        // Calculate scale factor to make the 1100px container fit exactly 
+        // into the current window width (fills screen left-to-right)
+        const scale = window.innerWidth / targetWidth;
+        
+        // Force container to full target width, then scale it down to fit window
+        container.style.width = targetWidth + 'px';
+        container.style.transform = `scale(${scale})`;
+
+        // Center vertically if the scaled game is shorter than the screen
+        const scaledHeight = container.offsetHeight * scale;
+        if (scaledHeight < window.innerHeight) {
+            container.style.top = ((window.innerHeight - scaledHeight) / 2) + 'px';
         }
     }
 
