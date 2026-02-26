@@ -21,6 +21,45 @@ body {
     margin: 0;
 }
 
+/* --- Mobile Switch Button & Scaling Styles --- */
+#mobile-switch-btn {
+    position: fixed;
+    top: 10px;
+    left: 10px;
+    z-index: 10000;
+    padding: 8px 12px;
+    background-color: #007acc;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.6);
+    transition: background-color 0.2s;
+}
+
+#mobile-switch-btn:hover {
+    background-color: #005f9e;
+}
+
+body.mobile-scale-mode {
+    background-color: #000; /* Black bars on sides/bottom */
+    margin: 0;
+    padding: 0;
+    overflow: hidden; /* Prevents scrollbars when scaled */
+    display: flex;
+    justify-content: center; /* Centers horizontally (leaves bars left and right if scaled by height) */
+    align-items: flex-start; /* Keeps it top-down */
+}
+
+body.mobile-scale-mode #game-container {
+    margin: 0;
+    border: none;
+    border-radius: 0;
+    /* Width, transform, and scaling are applied dynamically via JavaScript */
+}
+/* --- End Mobile Styles --- */
+
 .hidden {
     display: none !important;
 }
@@ -280,7 +319,6 @@ input[type=range]::-moz-range-thumb { border: 1px solid var(--border-color); hei
 input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 5px; cursor: pointer; background: var(--track-bg); border-radius: 3px; border: 1px solid var(--border-color); }
 input[type=range]::-moz-range-track { width: 100%; height: 5px; cursor: pointer; background: var(--track-bg); border-radius: 3px; border: 1px solid var(--border-color); }
 
-/* --- NEW BOT CPS INPUT STYLES --- */
 .settings-group .bot-cps-slider {
     flex-grow: 1;
 }
@@ -293,15 +331,13 @@ input[type=range]::-moz-range-track { width: 100%; height: 5px; cursor: pointer;
     color: var(--text-color);
     border-radius: 5px;
     text-align: center;
-    -moz-appearance: textfield; /* Hides arrows in Firefox */
+    -moz-appearance: textfield; 
 }
 .settings-group .bot-cps-input::-webkit-outer-spin-button,
 .settings-group .bot-cps-input::-webkit-inner-spin-button {
-    -webkit-appearance: none; /* Hides arrows in Chrome/Safari */
+    -webkit-appearance: none; 
     margin: 0;
 }
-/* --- END NEW STYLES --- */
-
 
 #countdown-display {
     font-size: 4em; font-weight: bold; color: var(--accent-color); text-align: center;
@@ -380,14 +416,13 @@ input[type=range]::-moz-range-track { width: 100%; height: 5px; cursor: pointer;
     user-select: none;
     -webkit-user-select: none;
     transition: background-color 0.2s, border-color 0.2s;
-    position: relative; /* Make it the positioning anchor for children */
+    position: relative; 
 }
 .control-group:hover {
     background-color: #3a3d41;
     border-color: #555;
 }
 
-/* NEW: Style for the CPS display */
 .cps-display {
     position: absolute;
     top: 6px;
@@ -506,9 +541,6 @@ input[type=range]::-moz-range-track { width: 100%; height: 5px; cursor: pointer;
     background-color: #3a3d41;
 }
 
-/* --- NEW BOT STYLES --- */
-
-/* Styles for Bot Configuration in Customize Modal */
 .player-type-controls {
     margin-top: 1rem;
     text-align: center;
@@ -525,7 +557,7 @@ input[type=range]::-moz-range-track { width: 100%; height: 5px; cursor: pointer;
     padding-top: 1rem;
     border-top: 1px dashed var(--border-color);
 }
-.bot-settings-container h4 { /* Re-using h4 for consistency */
+.bot-settings-container h4 { 
     text-align: center;
     margin-top: 0;
     margin-bottom: 1rem;
@@ -534,25 +566,72 @@ input[type=range]::-moz-range-track { width: 100%; height: 5px; cursor: pointer;
     font-size: 1.1em;
 }
 
-/* Style to make bot control groups non-interactive */
 .control-group.is-bot {
     cursor: default;
     opacity: 0.8;
 }
 .control-group.is-bot:hover {
-    background-color: var(--container-bg); /* Revert hover effect */
+    background-color: var(--container-bg); 
     border-color: var(--border-color);
 }
 .control-group.is-bot:hover .force-container {
-    border-color: var(--border-color); /* Revert hover effect */
+    border-color: var(--border-color); 
 }
 
-/* --- ADDED: Style for the repository link in the About section --- */
 #about-section a {
-    color: #9cdcfe; /* A nice light blue from the theme */
-    text-decoration: none; /* Optional: removes the default underline */
+    color: #9cdcfe; 
+    text-decoration: none; 
 }
 
 #about-section a:hover {
-    text-decoration: underline; /* Adds the underline back on hover for better UX */
+    text-decoration: underline; 
+}
+
+/* --- Mobile Space Reductions --- */
+body.mobile-scale-mode #game-container {
+    padding: 0.5rem 1rem; /* Reduced from 1.5rem 2rem */
+}
+
+body.mobile-scale-mode .top-bar {
+    margin-bottom: 0.5rem; /* Reduced from 1rem */
+}
+
+/* Specifically remove margin from the Title in mobile mode */
+body.mobile-scale-mode .top-bar h1 {
+    margin-bottom: 0;
+    padding-bottom: 0.2rem;
+}
+
+body.mobile-scale-mode .difficulty-settings {
+    padding: 0.5rem; /* Reduced from 1rem */
+    margin-bottom: 0.5rem; /* Reduced from 1rem */
+}
+
+body.mobile-scale-mode .difficulty-settings h3 {
+    margin-bottom: 5px; /* Reduced from 10px */
+}
+
+/* Hide the winner announcement area completely when there is no text in it */
+body.mobile-scale-mode #winner-announcement:empty {
+    display: none;
+    margin: 0;
+    padding: 0;
+}
+
+body.mobile-scale-mode #winner-announcement {
+    padding: 0.5rem;
+    margin-bottom: 0.5rem;
+    min-height: auto;
+}
+
+body.mobile-scale-mode #countdown-display {
+    margin-bottom: 0.5rem;
+}
+
+body.mobile-scale-mode #race-track {
+    margin-bottom: 0.5rem; /* Tightens space above the tap buttons */
+}
+
+body.mobile-scale-mode #controls {
+    margin-bottom: 0.5rem; /* Tightens space above the game log */
 }

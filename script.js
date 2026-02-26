@@ -334,7 +334,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     function triggerPlayerTap(player, keyPressed = null) {
-        // keyPressed can be a string ('a') for keyboard, or a number (0) for gamepad button index.
         if (player.isBot || !gameActive || player.isStalled) return;
 
         if (startMode === 'two' && keyPressed !== null) {
@@ -359,6 +358,11 @@ document.addEventListener('DOMContentLoaded', () => {
     function updateGridLayout() {
         const numPlayers = activePlayers.length > 0 ? activePlayers.length : 1;
         controlsContainer.style.gridTemplateColumns = `repeat(${numPlayers}, 1fr)`;
+
+        // Force a rescale every time the layout changes (players added/removed)
+        if (typeof updateMobileScale === 'function') {
+            updateMobileScale();
+        }
     }
 
     function updateGameReadyState() {
@@ -432,7 +436,6 @@ document.addEventListener('DOMContentLoaded', () => {
     function handlePreGameKeyDown(e) { const key = e.key.toLowerCase(); const player = activePlayers.find(p => !p.isBot && p.controllerType === 'keyboard' && (p.key === key || p.key2 === key)); if (player && player.startState === 'waiting') { if (falseStartPenalty === 'stall') { player.startState = 'false_start'; player.raceStats.startReactionTime = -2; logMessage(`💥 ${player.name} jumped the gun! (FALSE START)`); playSound({ frequency: 220, duration: 0.3, type: 'sawtooth' }); player.horseElement.style.opacity = '0.4'; } } }
     function handleGoKeyDown(e) { const key = e.key.toLowerCase(); const player = activePlayers.find(p => !p.isBot && p.controllerType === 'keyboard' && (p.key === key || p.key2 === key)); if (!player || player.startState !== 'waiting') return; if (player.raceStats.startReactionTime === -1) { const reaction = performance.now() - goTime; player.raceStats.startReactionTime = reaction; player.sessionStats.allReactionTimes.push(reaction); } if (startMode === 'single' && key === player.key) { player.startState = 'boosted'; } else if (startMode === 'two') { if (key === player.key) player.goKey1Pressed = true; if (key === player.key2) player.goKey2Pressed = true; } }
     
-    // [MODIFIED] Major refactor to handle individual button presses for sequential logic
     function handleGamepadInput(currentTime) {
         const polledPads = navigator.getGamepads ? navigator.getGamepads() : [];
 
@@ -573,6 +576,9 @@ document.addEventListener('DOMContentLoaded', () => {
         customizeModal.classList.add('hidden');
         helpModal.classList.add('hidden');
         startOrResetAutoCountdown();
+
+        // Ensure scale is correct after returning from menus
+        if (typeof updateMobileScale === 'function') updateMobileScale();
     }
     
     function toggleHelpModal() { if (helpModal.classList.contains('hidden')) { helpControlsList.innerHTML = ''; if (activePlayers.length > 0) { activePlayers.forEach(p => { const item = document.createElement('div'); item.className = 'help-control-item'; let controlText; switch(p.controllerType) { case 'keyboard': controlText = `<span class="key">${p.keyDisplay}</span>`; if (startMode === 'two') { controlText += ` & <span class="key">${p.key2Display}</span>`; } break; case 'gamepad': controlText = `<span class="key">GP ${p.gamepadIndex}</span>`; break; case 'bot': controlText = `<span class="key">BOT</span>`; break; default: controlText = `<span class="key">Not Connected</span>`; break; } item.innerHTML = `<p>${p.name}: ${controlText}</p>`; item.style.borderColor = p.color; helpControlsList.appendChild(item); }); } else { helpControlsList.innerHTML = '<p>No players have been added yet.</p>'; } openModal(helpModal); } else { closeAllModals(); } }
@@ -581,6 +587,67 @@ document.addEventListener('DOMContentLoaded', () => {
     
     function logMessage(message) { const li = document.createElement('li'); li.textContent = message; logList.appendChild(li); logContainer.scrollTop = logContainer.scrollHeight; }
     function updateWinsDisplay() { activePlayers.forEach(p => { p.winsElement.textContent = `Wins: ${p.sessionStats.wins}`; }); }
+
+    // --- Mobile Scaling & Fullscreen Logic ---
+    window.goFull = function() {
+        const el = document.documentElement;
+        // Request fullscreen API 
+        if (el.requestFullscreen) {
+            el.requestFullscreen().catch(err => console.log(err));
+        } else if (el.webkitRequestFullscreen) { // older Android fallback
+            el.webkitRequestFullscreen();
+        }
+        
+        // Enable mobile scale mode
+        document.body.classList.add('mobile-scale-mode');
+        document.getElementById('mobile-switch-btn').style.display = 'none'; // Hide the button once activated
+        updateMobileScale();
+    };
+
+    function updateMobileScale() {
+        if (!document.body.classList.contains('mobile-scale-mode')) return;
+        
+        const container = document.getElementById('game-container');
+        
+        // Remove scale to calculate accurate natural height
+        container.style.transform = 'none'; 
+        
+        // Target base width we want to fit on screen
+        const targetWidth = 1100;
+        const targetHeight = container.offsetHeight; 
+        
+        // Calculate the scale required to fit window perfectly
+        const scaleX = window.innerWidth / targetWidth;
+        const scaleY = window.innerHeight / targetHeight;
+        
+        // Using Math.min ensures it scales down keeping aspect ratio, leaving bars where necessary
+        const scale = Math.min(scaleX, scaleY);
+        
+        container.style.width = targetWidth + 'px';
+        container.style.transformOrigin = 'top center';
+        container.style.transform = `scale(${scale})`;
+    }
+
+    // Adjust scaling dynamically on window resize
+    window.addEventListener('resize', updateMobileScale);
+
+    // Keep fullscreen active if clicked anywhere on body (when mobile mode is active)
+    document.body.addEventListener("click", () => {
+        if (document.body.classList.contains('mobile-scale-mode')) {
+            const el = document.documentElement;
+            // Only try to request if we aren't currently fullscreen
+            if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+                if (el.requestFullscreen) {
+                    el.requestFullscreen().catch(err => {});
+                } else if (el.webkitRequestFullscreen) {
+                    el.webkitRequestFullscreen();
+                }
+            }
+            // Trigger a rescale slightly after tapping in case the browser UI 
+            // hiding/showing changes the available screen height.
+            setTimeout(updateMobileScale, 150);
+        }
+    });
 
     // --- Event Listeners ---
     document.addEventListener('keydown', handleKeyDown);
