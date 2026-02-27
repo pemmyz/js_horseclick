@@ -21,38 +21,42 @@
     <button id="mobile-switch-btn" onclick="goFull()">Switch to mobile</button>
 
     <div id="game-container">
-        <div class="top-bar">
-            <h1>Hevoskisat Clicker Challenge</h1>
-            <div id="player-management">
-                <select id="player-select"></select>
-                <button id="add-player-button">Add Player</button>
+        <!-- NEW WRAPPER FOR LEFT SIDE CONTENT -->
+        <div class="game-left-panel">
+            <div class="top-bar">
+                <h1>Hevoskisat Clicker Challenge</h1>
+                <div id="player-management">
+                    <select id="player-select"></select>
+                    <button id="add-player-button">Add Player</button>
+                </div>
+                <div class="top-buttons">
+                    <button id="new-game-button">New Game 🚀</button>
+                    <button id="customize-toggle-button">Customize ⚙️</button>
+                </div>
             </div>
-            <div class="top-buttons">
-                <button id="new-game-button">New Game 🚀</button>
-                <button id="customize-toggle-button">Customize ⚙️</button>
+
+            <div class="difficulty-settings">
+                <h3>Difficulty</h3>
+                <div class="difficulty-options">
+                    <label><input type="radio" name="difficulty" value="easy"> Easy</label>
+                    <label><input type="radio" name="difficulty" value="medium"> Medium</label>
+                    <label><input type="radio" name="difficulty" value="hard" checked> Hard</label>
+                    <label><input type="radio" name="difficulty" value="manual"> Manual</label>
+                </div>
             </div>
-        </div>
 
-        <div class="difficulty-settings">
-            <h3>Difficulty</h3>
-            <div class="difficulty-options">
-                <label><input type="radio" name="difficulty" value="easy"> Easy</label>
-                <label><input type="radio" name="difficulty" value="medium"> Medium</label>
-                <label><input type="radio" name="difficulty" value="hard" checked> Hard</label>
-                <label><input type="radio" name="difficulty" value="manual"> Manual</label>
+            <div id="winner-announcement"></div>
+            <div id="countdown-display">Add a player or press a key (W/Up Arrow) or Gamepad button to Join!</div>
+
+            <div id="race-track">
+                <!-- Player lanes will be added here by JS -->
             </div>
-        </div>
 
-        <div id="winner-announcement"></div>
-        <div id="countdown-display">Add a player or press a key (W/Up Arrow) or Gamepad button to Join!</div>
-
-        <div id="race-track">
-            <!-- Player lanes will be added here by JS -->
-        </div>
-
-        <div id="controls">
-            <!-- Player control groups will be added here by JS -->
-        </div>
+            <div id="controls">
+                <!-- Player control groups will be added here by JS -->
+            </div>
+        </div> 
+        <!-- END NEW WRAPPER -->
 
         <div id="log-container">
             <h2>Game Log</h2>

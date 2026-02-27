@@ -67,15 +67,59 @@ body.mobile-scale-mode #game-container {
     display: none !important;
 }
 
+/* --- MAIN LAYOUT (DESKTOP DEFAULT) --- */
 #game-container {
     background-color: var(--container-bg);
     border: 1px solid var(--border-color);
     border-radius: 8px;
     padding: 1.5rem 2rem;
-    width: 90%;
-    max-width: 1100px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    
+    /* Grid Layout: Left Panel (Game) | Right Panel (Log) */
+    display: grid;
+    grid-template-columns: 1fr 320px;
+    gap: 1.5rem;
+    width: 95%;
+    max-width: 1450px;
 }
+
+.game-left-panel {
+    /* Contains Top Bar, Track, Controls */
+    display: flex;
+    flex-direction: column;
+}
+
+/* Log Container Styles - Default Desktop (Side Panel) */
+#log-container { 
+    background-color: var(--bg-color); 
+    border: 1px solid var(--border-color); 
+    border-radius: 5px; 
+    padding: 1rem; 
+    
+    /* Take up height of the race area */
+    height: auto;
+    max-height: 800px;
+    overflow-y: auto; 
+    display: flex;
+    flex-direction: column;
+}
+
+#log-list { list-style: none; padding: 0; margin: 0; }
+#log-list li { padding: 0.3rem 0.5rem; border-bottom: 1px dashed #333; font-family: 'Consolas', 'Courier New', monospace; word-break: break-word; }
+#log-list li:last-child { border-bottom: none; }
+
+/* Responsive: Stack vertically if screen is standard tablet/small laptop */
+@media (max-width: 1200px) {
+    #game-container {
+        grid-template-columns: 1fr; /* Stack vertically */
+    }
+    #log-container {
+        height: 200px; /* Shorter height when stacked */
+    }
+}
+
+/* --- END MAIN LAYOUT --- */
+
 
 h1, h2, h3, h4 {
     text-align: center;
@@ -453,11 +497,6 @@ input[type=range]::-moz-range-track { width: 100%; height: 5px; cursor: pointer;
 
 .force-bar { width: 100%; height: 0%; transition: height 0.05s ease-out; border-radius: 6px 6px 0 0; }
 
-#log-container { background-color: var(--bg-color); border: 1px solid var(--border-color); border-radius: 5px; padding: 1rem; height: 150px; overflow-y: auto; }
-#log-list { list-style: none; padding: 0; margin: 0; }
-#log-list li { padding: 0.3rem 0.5rem; border-bottom: 1px dashed #333; font-family: 'Consolas', 'Courier New', monospace; word-break: break-word; }
-#log-list li:last-child { border-bottom: none; }
-
 #help-prompt {
     position: fixed;
     bottom: 10px;
@@ -595,6 +634,7 @@ input[type=range]::-moz-range-track { width: 100%; height: 5px; cursor: pointer;
 /* Space Reductions for Mobile */
 body.mobile-scale-mode #game-container {
     padding: 0.5rem 1rem;
+    max-width: none; /* Let the JS scale handle the sizing */
 }
 
 body.mobile-scale-mode .top-bar {
@@ -639,39 +679,26 @@ body.mobile-scale-mode #controls {
     margin-bottom: 0.5rem;
 }
 
-/* Portrait Mode Layout: Block (Log below Game) */
-body.mobile-scale-mode.is-portrait #game-container {
-    display: block;
-    width: 1100px !important; /* Standard width */
-}
-
-body.mobile-scale-mode.is-portrait #log-container {
-    margin-top: 10px;
-    height: 150px;
-}
-
-/* Landscape Mode Layout: Grid (Game Left, Log Right) */
+/* 
+   SCALED LANDSCAPE MODE 
+   Mimics Desktop: Side by Side
+*/
 body.mobile-scale-mode.is-landscape #game-container {
-    display: grid;
-    /* 1100px for Game Area, 350px for Log */
-    grid-template-columns: 1100px 350px; 
-    grid-template-rows: auto;
-    align-items: start;
-    gap: 20px;
-    width: 1470px !important; /* Force layout width for scaling */
-    max-width: none;
+    grid-template-columns: 1fr 320px;
+    width: 1400px !important; /* Fixed Width for Reference Scaling */
 }
-
-/* Ensure direct children mostly go to left column */
-body.mobile-scale-mode.is-landscape #game-container > * {
-    grid-column: 1;
-    width: 100%;
-}
-
-/* Force Log to right column and span down */
 body.mobile-scale-mode.is-landscape #log-container {
-    grid-column: 2;
-    grid-row: 1 / span 20; /* Span heavily to cover height */
-    height: 100%;
-    min-height: 600px; /* Ensure visual balance */
+    height: 700px;
+}
+
+/* 
+   SCALED PORTRAIT MODE 
+   Stacked: Game Top, Log Bottom
+*/
+body.mobile-scale-mode.is-portrait #game-container {
+    grid-template-columns: 1fr;
+    width: 1000px !important; /* Fixed Width for Reference Scaling */
+}
+body.mobile-scale-mode.is-portrait #log-container {
+    height: 180px;
 }
